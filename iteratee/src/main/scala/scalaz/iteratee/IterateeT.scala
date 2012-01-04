@@ -186,6 +186,20 @@ trait IterateeTFunctions {
     foldM(())((_: Unit, e: E) => write(e))
   }
 
+  /**
+   * An iteratee that consumes all of the input into something that is Empty and Pointed. Useful for testing.
+   */
+  def consume[X, E, F[_]: Monad, A[_]: Empty : Pointed]: IterateeT[X, E, F, A[E]] = {
+    import scalaz.syntax.plus._
+    def step(e: Input[E]): IterateeT[X, E, F, A[E]] = 
+      e.fold(empty = cont(step)
+        , el = e => cont(step).map(a => implicitly[Pointed[A]].point(e) <+> a)
+        , eof = done(implicitly[Empty[A]].empty, eofInput[E])
+      )   
+
+    cont(step)
+  }
+
   /**An iteratee that consumes the head of the input **/
   def head[X, E, F[_] : Pointed]: IterateeT[X, E, F, Option[E]] = {
     def step(s: Input[E]): IterateeT[X, E, F, Option[E]] =
@@ -270,6 +284,140 @@ trait IterateeTFunctions {
    * An iteratee that checks if the input is EOF.
    */
   def isEof[X, E, F[_] : Pointed]: IterateeT[X, E, F, Boolean] = cont(in => done(in.isEof, in))
+
+  private class NestedIterateeOps[X, E, F[_]: Monad] {
+    import scalaz.syntax.Syntax.bind._
+    import scalaz.syntax.Syntax.order._
+
+    type IterateeM[A] = IterateeT[X, E, F, A]
+    implicit val IterateeMM = IterateeT.IterateeTMonad[Unit, Int, IterateeM]
+    
+    def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
+
+    def end[A, EE](step: StepT[X, EE, F, A]): IterateeT[X, E, F, A] = {
+      step.fold(
+        cont = contf  => iterateeT(contf(eofInput).value >>= (s => end(s).value)), //todo: should throw a diverging iteratee error
+        done = (a, _) => done(a, emptyInput),
+        err  = x      => err(x)
+      )
+    }
+
+    def mergeI[A](step: StepT[X, E, F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
+      step.fold[IterateeT[X, E, IterateeM, A]](
+        cont = contf => for {
+          leftOpt <- head[X, E, IterateeM]
+          rightOpt <- lift(peek[X, E, F])
+          a <- {
+          
+            val nextStep: IterateeT[X, E, F, StepT[X, E, IterateeM, A]] = sys.error("todo") /*(leftOpt, rightOpt) match {
+              case (Some(left), Some(right)) => 
+                val (first, second) = if (right > left) (left, right) else (right, left)
+
+                contf(elInput(first)) >>== { s: StepT[X, E, F, A] => 
+                  s.fold[IterateeT[X, E, IterateeM, A]](
+                    cont = contf => iterateeT[X, E, IterateeM, A](contf(elInput(second)) >>== (s => mergeI(s).value)),
+                    done = (a, _) => done(a, emptyInput),
+                    err  = x => err(x)
+                  ).value
+                }
+
+              case (None, Some(right)) => contf(elInput(right)) >>== (s => mergeI(s).value)
+              case (Some(left), None)  => contf(elInput(left))  >>== (s => mergeI(s).value)
+              case _ => step.fold(
+                cont = contf => iterateeT(
+                  contf(eofInput).foldT(
+                    cont = sys.error("diverging iteratee"),
+                    done = (a, _)  => done[X, E, F, StepT[X, E, IterateeM, A]](sdone(a, emptyInput), emptyInput).value,
+                    err  = x       => err[X, E, F, StepT[X, E, IterateeM, A]](x).value
+                  )
+                ),
+                done = (a, _) => done[X, E, F, StepT[X, E, IterateeM, A]](sdone(a, emptyInput), emptyInput),
+                err  = x      => err(x)
+              )
+            }
+            */
+
+            iterateeT[X, E, IterateeM, A](nextStep)
+          }
+        } yield a,
+        done = (a, _) => done(a, emptyInput),
+        err  = x => err(x)
+      )
+    }
+
+    def matchI[A](step: StepT[X, (E, E), F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
+      step.fold[IterateeT[X, E, IterateeM, A]](
+        cont = contf => {
+          for {
+            leftOpt <- head[X, E, IterateeM]
+
+            rightOpt <- lift(leftOpt.map { left =>
+                          for {
+                            _        <- dropWhile[X, E, F](_ < left)
+                            rightOpt <- peek[X, E, F]
+                          } yield rightOpt
+                        }.getOrElse(done[X, E, F, Option[E]](None, emptyInput)))
+            
+            val leftRightOpt = for { left <- leftOpt; right <- rightOpt } yield (left, right)
+
+            a <- leftRightOpt match {
+              case Some((left, right)) if (left ?|? right == Ordering.EQ) => 
+                val joined = contf(elInput((left, right))) >>== (s => matchI(s).value)
+                IterateeT[X, E, IterateeM, A](joined)
+
+              case Some(_) => matchI(step)
+
+              case None => lift(end(step))
+            }
+          } yield a
+        },
+        done = (a, _) => done(a, emptyInput),
+        err  = x => err(x)
+      )
+    }
+
+    def cogroupI[A](step: StepT[X, Either3[E, (E, E), E], F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
+      import Either3._
+      step.fold[IterateeT[X, E, IterateeM, A]](
+        cont = contf => {
+          for {
+            leftOpt  <- peek[X, E, IterateeM]
+            rightOpt <- lift(peek[X, E, F])
+            a <- (leftOpt, rightOpt) match {
+              case (left, Some(right)) if left.forall(right < _) => 
+                for {
+                  right <- lift(head[X, E, F])
+                  a <- iterateeT[X, E, IterateeM, A](contf(elInput(right3(right.get))) >>== (s => cogroupI(s).value))
+                } yield a
+
+              case (Some(left), right) if right.forall(_ > left) => 
+                for {
+                  left <- head[X, E, IterateeM]
+                  a <- iterateeT[X, E, IterateeM, A](contf(elInput(left3(left.get))) >>== (s => cogroupI(s).value))
+                } yield a
+          
+              case (Some(left), Some(right)) => 
+                for {
+                  left <- head[X, E, IterateeM]
+                  right <- lift(head[X, E, F])
+                  a <- iterateeT[X, E, IterateeM, A](contf(elInput(middle3((left.get, right.get)))) >>== (s => cogroupI(s).value))
+                } yield a
+
+              case _ => lift(end(step))
+            }
+          } yield a
+        },
+        done = (a, _) => done(a, emptyInput),
+        err  = x => err(x)
+      )
+    }
+  }
+  
+  def matchI[X, E: Order, F[_]: Monad, A](step: StepT[X, (E, E), F, A]) = new NestedIterateeOps().matchI(step)
+
+  def mergeI[X, E: Order, F[_]: Monad, A](step: StepT[X, E, F, A]) = new NestedIterateeOps().mergeI(step)
+  
+  def cogroupI[X, E: Order, F[_]: Monad, A](step: StepT[X, Either3[E, (E, E), E], F, A]) = new NestedIterateeOps().cogroupI(step)
 }
 
 //

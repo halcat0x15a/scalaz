@@ -129,79 +129,36 @@ trait EnumeratorTFunctions {
   }
 
 /*
-  type AChunk[F[_], A] = (A, F[A])
   def merge[X, E: Order, F[_]: Monad, A]: EnumerateeT[X, E, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A] = {
-    val FMonad = implicitly[Monad[F]]
-    def loop(f: Input[E] => F[(IterateeT[X, E, F, A], Input[E])], 
-             c1: AChunk[({type λ[α] = IterateeT[X, E, F, α]})#λ, E],
-             c2: AChunk[({type λ[α] = IterateeT[X, E, F, α]})#λ, E]) : IterateeT[X, E, F, IterateeT[X, E, F, A]] = {
+    val FMonad = implicitly[Monad[F]
+
+    def loop(f: Input[E] => IterateeT[X, E, F, A],               
+             head1: IterateeT[X, E, F, Option[E]],
+             head2: IterateeT[X, E, F, Option[E]]) : IterateeT[X, E, F, StepT[X, E, F, A]] = {
+      for {    
+        h1 <- head1
+        h2 <- head2
+      } yield {
+        (h1,h2) match {
+          (None, _) =>
+          (_, None) =>
+          (Some(e1), Some(e2)) =>
+        } 
+      } 
       sys.error("todo")
     }
-
+    
     (s: StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]) => s.mapContOr(
-      ik => sys.error("todo"), //loop(ik, sys.error("todo"), sys.error("todo")),
+      ik => IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]{
+        loop(ik, head, head).map(step => sys.error("todo"): StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A])
+      }, 
       IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]{
-        implicitly[Pointed[({type λ[α] = IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, α]})#λ]].point(s)
-        //done(s, eofInput[E]) 
+        implicitly[Pointed[({type λ[α] = IterateeT[X, E, F, α]})#λ]].point(s)
       } : IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]
     )
   }
 */
 
-  private class NestedIterateeOps[X, E, F[_]: Monad] {
-    type IterateeM[A] = IterateeT[X, E, F, A]
-    
-    def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
-
-    def end[A](step: StepT[X, (E, E), F, A]): IterateeT[X, E, F, A] = {
-      step.fold(
-        cont = contf  => IterateeT(contf(eofInput).value >>= (s => end(s).value)),
-        done = (a, r) => done(a, emptyInput),
-        err  = e      => err(e)
-      )
-    }
-
-    def matchI[A](step: StepT[X, (E, E), F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
-      step.fold[IterateeT[X, E, IterateeM, A]](
-        cont = contf => {
-          for {
-            leftOpt <- head[X, E, IterateeM]
-
-            rightOpt <- lift(leftOpt.map { left =>
-                          for {
-                            _        <- dropWhile[X, E, F](_ < left)
-                            rightOpt <- peek[X, E, F]
-                          } yield rightOpt
-                        }.getOrElse(done[X, E, F, Option[E]](None, emptyInput)))
-            
-            val leftRightOpt = for { left <- leftOpt; right <- rightOpt } yield (left, right)
-
-            a <- leftRightOpt match {
-              case Some((left, right)) if (left ?|? right == Ordering.EQ) => 
-                val joined = contf(elInput((left, right))).value >>= (s => matchI(s).value.value)
-                
-                IterateeT[X, E, IterateeM, A](IterateeT(joined))
-
-              case Some(_) => matchI(step)
-
-              case None => lift(end(step))
-            }
-          } yield a
-        },
-        done = (a, r) => done(a, emptyInput),
-        err  = e => err(e)
-      )
-    }
-    
-    def cogroupI[A](step: StepT[X, Either[Either[E, E], (E, E)], F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
-      null
-    }
-  }
-  
-  def matchI[X, E: Order, F[_]: Monad, A](step: StepT[X, (E, E), F, A]) = new NestedIterateeOps().matchI(step)
-  
-  def cogroupI[X, E: Order, F[_]: Monad, A](step: StepT[X, Either[Either[E, E], (E, E)], F, A]) = new NestedIterateeOps().cogroupI(step)
-  
   sealed trait EnumeratorTFactory[X, E] {
     def apply[F[_]: Monad, A]: EnumeratorT[X, E, F, A]
   }
