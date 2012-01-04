@@ -55,7 +55,7 @@ object Either3 {
 
   implicit def show[A: Show, B: Show, C: Show]: Show[Either3[A, B, C]] = new Show[Either3[A, B, C]] {
     def show(v: Either3[A, B, C]) = shows(v).toCharArray.toList
-    def shows(v: Either3[A, B, C]) = {
+    override def shows(v: Either3[A, B, C]) = {
       v.fold(
         a => "Left3(" + a.shows + ")",
         b => "Middle3(" + b.shows + ")",

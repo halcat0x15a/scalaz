@@ -285,7 +285,7 @@ trait IterateeTFunctions {
    */
   def isEof[X, E, F[_] : Pointed]: IterateeT[X, E, F, Boolean] = cont(in => done(in.isEof, in))
 
-  private class NestedIterateeOps[X, E, F[_]: Monad] {
+  private class NestedIterateeOps[X, E, F[_]](implicit FMonad: Monad[F]) {
     import scalaz.syntax.Syntax.bind._
     import scalaz.syntax.Syntax.order._
 
@@ -303,46 +303,29 @@ trait IterateeTFunctions {
     }
 
     def mergeI[A](step: StepT[X, E, F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
-      step.fold[IterateeT[X, E, IterateeM, A]](
-        cont = contf => for {
-          leftOpt <- head[X, E, IterateeM]
-          rightOpt <- lift(peek[X, E, F])
-          a <- {
-          
-            val nextStep: IterateeT[X, E, F, StepT[X, E, IterateeM, A]] = sys.error("todo") /*(leftOpt, rightOpt) match {
-              case (Some(left), Some(right)) => 
-                val (first, second) = if (right > left) (left, right) else (right, left)
-
-                contf(elInput(first)) >>== { s: StepT[X, E, F, A] => 
-                  s.fold[IterateeT[X, E, IterateeM, A]](
-                    cont = contf => iterateeT[X, E, IterateeM, A](contf(elInput(second)) >>== (s => mergeI(s).value)),
-                    done = (a, _) => done(a, emptyInput),
-                    err  = x => err(x)
-                  ).value
-                }
-
-              case (None, Some(right)) => contf(elInput(right)) >>== (s => mergeI(s).value)
-              case (Some(left), None)  => contf(elInput(left))  >>== (s => mergeI(s).value)
-              case _ => step.fold(
-                cont = contf => iterateeT(
-                  contf(eofInput).foldT(
-                    cont = sys.error("diverging iteratee"),
-                    done = (a, _)  => done[X, E, F, StepT[X, E, IterateeM, A]](sdone(a, emptyInput), emptyInput).value,
-                    err  = x       => err[X, E, F, StepT[X, E, IterateeM, A]](x).value
-                  )
-                ),
-                done = (a, _) => done[X, E, F, StepT[X, E, IterateeM, A]](sdone(a, emptyInput), emptyInput),
-                err  = x      => err(x)
-              )
-            }
-            */
-
-            iterateeT[X, E, IterateeM, A](nextStep)
-          }
-        } yield a,
-        done = (a, _) => done(a, emptyInput),
-        err  = x => err(x)
+      def estep(step: StepT[X, E, F, A]): StepT[X, Either3[E, (E, E), E], F, A] = step.fold(
+        cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+          in.fold(
+            el = _.fold(
+              left   = a => contf(elInput(a)) >>== (s => estep(s).pointI),
+              middle = b => contf(elInput(b._1)) >>== { s =>
+                s.fold(
+                  cont = contf => contf(elInput(b._2)) >>== (s => estep(s).pointI),
+                  done = (a, _) => done(a, emptyInput[Either3[E, (E, E), E]]),
+                  err  = x => err(x)
+                )
+              },
+              right  = c => contf(elInput(c)) >>== (s => estep(s).pointI)
+            ),
+            empty = contf(emptyInput[E]) >>== (s => estep(s).pointI), 
+            eof =   contf(eofInput[E]) >>== (s => estep(s).pointI)
+          )
+        },
+        done = (a, _) => sdone(a, emptyInput[Either3[E, (E, E), E]]),
+        err  = x => serr(x)
       )
+
+      cogroupI(estep(step))
     }
 
     def matchI[A](step: StepT[X, (E, E), F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
