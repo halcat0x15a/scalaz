@@ -128,57 +128,6 @@ trait EnumeratorTFunctions {
       )
   }
 
-/*
-  def merge[X, E: Order, F[_]: Monad, A]: EnumerateeT[X, E, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A] = {
-    val FMonad = implicitly[Monad[F]
-
-    def loop(f: Input[E] => IterateeT[X, E, F, A],               
-             head1: IterateeT[X, E, F, Option[E]],
-             head2: IterateeT[X, E, F, Option[E]]) : IterateeT[X, E, F, StepT[X, E, F, A]] = {
-      for {    
-        h1 <- head1
-        h2 <- head2
-      } yield {
-        (h1,h2) match {
-          (None, _) =>
-          (_, None) =>
-          (Some(e1), Some(e2)) =>
-        } 
-      } 
-      sys.error("todo")
-    }
-    
-    (s: StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]) => s.mapContOr(
-      ik => IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]{
-        loop(ik, head, head).map(step => sys.error("todo"): StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A])
-      }, 
-      IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]{
-        implicitly[Pointed[({type λ[α] = IterateeT[X, E, F, α]})#λ]].point(s)
-      } : IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, StepT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]]
-    )
-  }
-*/
-
-  sealed trait EnumeratorTFactory[X, E] {
-    def apply[F[_]: Monad, A]: EnumeratorT[X, E, F, A]
-  }
-  
-  def matchE[X, E: Order](enum1F: EnumeratorTFactory[X, E], enum2F: EnumeratorTFactory[X, E]): EnumeratorTFactory[X, (E, E)] = new EnumeratorTFactory[X, (E, E)] {
-    def apply[F[_]: Monad, A]: EnumeratorT[X, (E, E), F, A] = {
-      val enum1: EnumeratorT[X, E, ({type L[A] = IterateeT[X, E, F, A]})#L, A] = enum1F.apply[({type L[A] = IterateeT[X, E, F, A]})#L, A]
-      def enum2[A]: EnumeratorT[X, E, F, A] = enum2F.apply[F, A]
-      
-      (step: StepT[X, (E, E), F, A]) => {
-        val nested = matchI(step)
-      
-        
-      
-        null: IterateeT[X, (E, E), F, A]
-      }
-    }
-  }
-
-  
   /*
   Full types for recursive case:
   
