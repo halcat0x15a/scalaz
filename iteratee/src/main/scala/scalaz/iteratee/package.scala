@@ -28,6 +28,9 @@ package object iteratee {
   type EnumerateeT[X, O, I, F[_], A] =
   StepT[X, I, F, A] => IterateeT[X, O, F, StepT[X, I, F, A]]
 
+  type EnumerateeT2[X, O, I, F[_], A] =
+  StepT[X, I, F, A] => IterateeT[X, O, ({type λ[α] = IterateeT[X, O, F, α]})#λ, StepT[X, I, F, A]]
+
   object EnumerateeT extends EnumerateeTFunctions
 
   type Enumeratee[X, O, I, A] =

@@ -9,8 +9,8 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
   import scalaz.syntax.Syntax.order._
 
   type IterateeM[A] = IterateeT[X, E, F, A]
-  implicit val IterateeMM = IterateeT.IterateeTMonad[Unit, Int, IterateeM]
-  
+  def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
+
   private def end[A, EE](step: StepT[X, EE, F, A]): IterateeT[X, E, F, A] = {
     step.fold(
       cont = contf  => iterateeT(contf(eofInput).value >>= (s => end(s).value)), //todo: should throw a diverging iteratee error
@@ -18,8 +18,6 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
       err  = x      => err(x)
     )
   }
-
-  def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
 
   def mergeI[A](step: StepT[X, E, F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, A] = {
     def estep(step: StepT[X, E, F, A]): StepT[X, Either3[E, (E, E), E], F, A] = step.fold(
@@ -129,39 +127,55 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
       err = x => err(x)
     )
   }
-
 }
 
 private[iteratee] class NestedEnumeratorT[X, E] {
   // frequently used type lambdas
+  def lift[A, F[_]: Monad](iter: IterateeT[X, E, F, A]): IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
+
   private[iteratee] class FG[F[_[_], _], G[_]] {
     type FGA[A] = F[G, A]
     type IterateeM[A] = IterateeT[X, E, FGA, A]
+    type StepM[A] = StepT[X, (E, E), FGA, A]
+  }
+
+  trait Value[A] {
+    def value: A
   }
 
   def crossE[A, G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new EnumeratorP[X, (E, E), G] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F], MF: Monad[FG[F, G]#FGA]): EnumeratorT[X, (E, E), FG[F, G]#FGA, A] = {
-      val e1t = e1.apply[F, A]
-      implicit val iterateeTM = IterateeT.IterateeTMonad[X, E, FG[F, G]#FGA]
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F], MF: Monad[FG[F, G]#FGA]): EnumeratorT[X, (E, E), FG[F, G]#FGA, A] = new Value[EnumeratorT[X, (E, E), FG[F, G]#FGA, A]] {
+      type FGA[α] = FG[F, G]#FGA[α]
+      type IterateeM[α] = FG[F, G]#IterateeM[α]
+      type StepM = FG[F, G]#StepM[A]
 
-      def outerLoop(step: StepT[X, (E, E), FG[F, G]#FGA, A]) : IterateeT[X, (E, E), FG[F, G]#FGA, A] = {
-        val iteratee = for {
-          leap <- cross1[X, E, FG[F, G]#FGA, A](step)
-          _    <- drop[X, E, FG[F, G]#FGA](1) 
-          eof  <- isEof[X, E, FG[F, G]#FGA]
-          sa   <- if (eof) done[X, (E, E), FG[F, G]#FGA, StepT[X, (E, E), FG[F, G]#FGA, A]](step, eofInput) else outerLoop(leap)
-        } yield sa
+      implicit val IterateeTM = IterateeT.IterateeTMonad[X, E, FG[F, G]#FGA]
+      implicit val IterateeTMT = IterateeT.IterateeTMonadTrans[X, E]
 
-        (iteratee >>== e1t).run(x => err(x).value)
+      def value = {
+        //val e1t = e1.apply[({type λ[ƒ[_], α] = IterateeT[X, E, ({type λ[σ] = F[ƒ, σ]})#λ, α]})#λ, A](IterateeTMT)
+        val e1t = e1.apply[F, A]
+
+        def outerLoop(step: StepT[X, (E, E), FGA, A]) : IterateeT[X, (E, E), FGA, A] = {
+          val iteratee: IterateeT[X, E, IterateeM, StepT[X, (E, E), FGA, A]] = for {
+            leap <- cross1[X, E, FGA, A].apply(step)
+            _    <- lift[Unit, FGA](drop[X, E, FGA](1))
+            eof  <- lift[Boolean, FGA](isEof[X, E, FGA])
+            sa   <- lift[StepM, FGA](if (eof) done[X, E, FGA, StepM](step, eofInput) else done[X, E, FGA, StepM](leap, emptyInput))
+          } yield sa
+
+          //(iteratee >>== e1t).run(x => err(x).value)
+          null
+        }
+
+        outerLoop
       }
-
-      outerLoop
-    }
+    }.value
   }
 }
 
 private abstract class EnumeratorP[X, E, G[_]: Monad] {
-  def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ, A]
+  def apply[F[_[_], _], A](implicit t: MonadTrans[F], MF: Monad[({type λ[α] = F[G, α]})#λ]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ, A]
 }
 
 // vim: set ts=4 sw=4 et:
