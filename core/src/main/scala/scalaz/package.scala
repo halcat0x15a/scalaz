@@ -92,7 +92,9 @@ package object scalaz {
   }
 
   object IdT extends IdTInstances {
-    def apply[F[_], A](fa: F[A]): IdT[F, A] = new IdT(fa)
+    def apply[F[_], A](fa: F[A]): IdT[F, A] = new IdT[F, A] {
+      val value = fa
+    }
   }
 
   // TODO Review!
