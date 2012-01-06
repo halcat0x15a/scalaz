@@ -322,7 +322,7 @@ trait IterateeTFunctions {
   
   def cogroupI[X, E: Order, F[_]: Monad, A](step: StepT[X, Either3[E, (E, E), E], F, A]) = (new NestedIterateeT).cogroupI(step)
 
-  def cross1[X, E, F[_]: Monad, A]: EnumerateeT2[X, E, (E, E), F, A] = (new NestedIterateeT[X, E, F]).cross1[A]
+  def cross1[X, E, F[_]: Monad, A]: EnumerateeNT[X, E, (E, E), F, A] = (new NestedIterateeT[X, E, F]).cross1[A]
 }
 
 //
