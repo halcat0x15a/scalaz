@@ -124,6 +124,8 @@ trait EnumeratorTFunctions {
       )
   }
 
+  def cross[X, E, G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new NestedEnumeratorT[X, E].crossE[G](e1, e2)
+
   /*
   Full types for recursive case:
   

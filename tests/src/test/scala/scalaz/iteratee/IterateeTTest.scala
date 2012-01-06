@@ -64,17 +64,26 @@ class IterateeTTest extends Spec {
     )
   }
 
-/*
   "crossI the first element with all of the second iteratee's elements" in {
     implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
-    val enum  = enumStream[Unit, Int, ({type L[A] = IterateeT[Unit, Int, Id, A]})#L, StepT[Unit, (Int, Int), Id, List[(Int, Int)]]](Stream(1, 3)) 
-    val enum2 = enumStream[Unit, Int, Id, StepT[Unit, (Int, Int), Id, List[(Int, Int)]]](Stream(2, 3, 4)) 
+    val enum1p = new EnumeratorP[Unit, Int, Id] {
+      def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A] = {
+        implicit val fmonad = t.apply[Id]
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A](Stream(1, 3)) 
+      }
+    }
 
-    iterateeT[Unit, (Int, Int), Id, List[(Int, Int)]](((crossI(consume[Unit, (Int, Int), Id, List].value) >>== enum).run(_ => done(sdone(Nil, eofInput), eofInput)) >>== enum2).run(_ => sdone(Nil, eofInput))).run(_ => Nil) must_== List(
+    val enum2p = new EnumeratorP[Unit, Int, Id] {
+      def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A] = {
+        implicit val fmonad = t.apply[Id]
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A](Stream(2, 3, 4)) 
+      }
+    }
+
+    (consume[Unit, (Int, Int), Id, List] >>== crossE[Id](enum1p, enum2p)).run(x => sys.error("...")) must_== List(
       (1, 2), (1, 3), (1, 4), (3, 2), (3, 3), (3, 4)
     )
   }
-  */
 
   object instances {
     object iterateet {

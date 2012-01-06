@@ -188,6 +188,19 @@ trait IterateeTInstances extends IterateeTInstances0 {
     implicit def apply[G[_] : Monad]: Monad[({type λ[α] = IterateeT[X, E, G, α]})#λ] = IterateeT.IterateeTMonad[X, E, G]
   }
 
+  implicit def IterateeTMonadTransT[X, E, H[_[_], _]](implicit t: MonadTrans[H]) = new MonadTrans[({type λ[ƒ[_], α] = IterateeT[X, E, ({type λ[σ] = H[ƒ, σ]})#λ, α]})#λ] {
+    def hoist[M[_]: Monad, N[_]](f: M ~> N) = new (({type ƒ[α] = IterateeT[X, E, ({type λ[σ] = H[M, σ]})#λ, α]})#ƒ ~> ({type ƒ[α] = IterateeT[X, E, ({type λ[σ] = H[N, σ]})#λ, α]})#ƒ) {
+      def apply[A](fa: IterateeT[X, E, ({type λ[σ] = H[M, σ]})#λ, A]): IterateeT[X, E, ({type λ[σ] = H[N, σ]})#λ, A] = 
+        fa.mapI[({type λ[σ] = H[N, σ]})#λ](t.hoist[M, N](f))(t.apply[M])
+    }
+
+    def liftM[G[_]: Monad, A](ga: G[A]): IterateeT[X, E, ({type λ[σ] = H[G, σ]})#λ, A] = 
+      IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[σ] = H[G, σ]})#λ, A](t.liftM(ga))(t.apply[G])
+
+    def apply[G[_]: Monad]: Monad[({type λ[α] = IterateeT[X, E, ({type λ[σ] = H[G, σ]})#λ, α]})#λ] = 
+      IterateeT.IterateeTMonad[X, E, ({type λ[σ] = H[G, σ]})#λ](t.apply[G])
+  }
+
   implicit def IterateeTMonadIO[X, E, F[_]](implicit M0: MonadIO[F]): MonadIO[({type λ[α] = IterateeT[X, E, F, α]})#λ] =
     new IterateeTMonadIO[X, E, F] {
       implicit def F = M0

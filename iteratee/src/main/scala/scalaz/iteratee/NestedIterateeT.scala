@@ -143,26 +143,15 @@ private[iteratee] class NestedEnumeratorT[X, E] {
     def value: A
   }
 
-  class IterateeTMonadTransT[H[_[_], _]] extends MonadTrans[({type λ[ƒ[_], α] = IterateeT[X, E, ({type λ[σ] = H[ƒ, σ]})#λ, α]})#λ] {
-    def hoist[M[_]: Monad, N[_]](f: M ~> N) = new (({type ƒ[α] = IterateeT[X, E, ({type λ[σ] = H[M, σ]})#λ, α]})#ƒ ~> ({type ƒ[α] = IterateeT[X, E, ({type λ[σ] = H[N, σ]})#λ, α]})#ƒ) {
-      def apply[A](fa: IterateeT[X, E, ({type λ[σ] = H[M, σ]})#λ, A]): IterateeT[X, E, ({type λ[σ] = H[N, σ]})#λ, A] = null
-    }
-
-    def liftM[G[_]: Monad, A](ga: G[A]): IterateeT[X, E, ({type λ[σ] = H[G, σ]})#λ, A] = null
-      //iterateeT(Monad[G].map(ga)((x: A) => StepT.sdone[X, E, G, A](x, emptyInput)))
-
-    def apply[G[_]: Monad]: Monad[({type λ[α] = IterateeT[X, E, ({type λ[σ] = H[G, σ]})#λ, α]})#λ] = null
-  }
-
-  def crossE[A, G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new EnumeratorP[X, (E, E), G] {
+  def crossE[G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new EnumeratorP[X, (E, E), G] {
     def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, (E, E), FG[F, G]#FGA, A] = new Value[EnumeratorT[X, (E, E), FG[F, G]#FGA, A]] {
       import t.apply
       type FGA[α] = FG[F, G]#FGA[α]
       type IterateeM[α] = FG[F, G]#IterateeM[α]
       type StepM = FG[F, G]#StepM[A]
 
-      implicit val IterateeTM = IterateeT.IterateeTMonad[X, E, FG[F, G]#FGA]
-      implicit val IterateeTMT = new IterateeTMonadTransT[F]
+      implicit val IterateeTM  = IterateeT.IterateeTMonad[X, E, FG[F, G]#FGA]
+      implicit val IterateeTMT = IterateeT.IterateeTMonadTransT[X, E, F]
 
       def value = { (step: StepT[X, (E, E), FGA, A]) =>
         val e1t = e1.apply[({type λ[ƒ[_], α] = IterateeT[X, E, ({type λ[σ] = F[ƒ, σ]})#λ, α]})#λ, StepT[X, (E, E), FGA, A]]
@@ -170,20 +159,25 @@ private[iteratee] class NestedEnumeratorT[X, E] {
 
         def outerLoop(step: StepT[X,(E, E),this.FGA,A]): IterateeT[X, E, IterateeM, StepT[X, (E, E), FGA, A]] = for {
           leap <- cross1[X, E, FGA, A].apply(step)
-          _    <- lift[Unit, FGA](drop[X, E, FGA](1))
-          eof  <- lift[Boolean, FGA](isEof[X, E, FGA])
+          _    <- drop[X, E, IterateeM](1)
+          eof  <- isEof[X, E, IterateeM]
           sa   <- if (eof) lift[StepM, FGA](done[X, E, FGA, StepM](leap, eofInput)) else outerLoop(leap)
         } yield sa
 
-        def repeat(s: StepT[X, E, FGA, StepT[X,(E, E), FGA, A]]): IterateeT[X, (E, E), FGA, A] = s.pointI >>== e2t >>== repeat
+        def repeat(s: StepT[X, E, FGA, StepT[X, (E, E), FGA, A]]): IterateeT[X, E, FGA, StepT[X, (E, E), FGA, A]] = {
+          e2t(s) >>== repeat
+        }
 
-        (outerLoop(step) >>== e1t).run(x => iterateeT(err[X, E, FGA, StepT[X, (E, E), FGA, A]](x).value)) >>== repeat
+        iterateeT[X, (E, E), FGA, A] {
+          ((outerLoop(step) >>== e1t).run(x => iterateeT(err[X, E, FGA, StepT[X, (E, E), FGA, A]](x).value)) >>== repeat)
+          .run(x => err[X, (E, E), FGA, A](x).value)
+        }
       }
     }.value
   }
 }
 
-private abstract class EnumeratorP[X, E, G[_]: Monad] {
+abstract class EnumeratorP[X, E, G[_]: Monad] {
   def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ, A]
 }
 
