@@ -65,6 +65,7 @@ class IterateeTTest extends Spec {
   }
 
   "crossI the first element with all of the second iteratee's elements" in {
+    import IdT._
     implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
     val enum1p = new EnumeratorP[Unit, Int, Id] {
       def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A] = {
@@ -80,7 +81,10 @@ class IterateeTTest extends Spec {
       }
     }
 
-    (consume[Unit, (Int, Int), Id, List] >>== crossE[Id](enum1p, enum2p)).run(x => sys.error("...")) must_== List(
+    implicit val idTm = idTMonad[Id]
+    val consumer = consume[Unit, (Int, Int), ({type λ[α] = IdT[Id, α]})#λ, List]
+    val producer = cross[Unit, Int, Id](enum1p, enum2p).apply[IdT, List[(Int, Int)]]
+    (consumer >>== producer).run(x => sys.error("...")) must_== List(
       (1, 2), (1, 3), (1, 4), (3, 2), (3, 3), (3, 4)
     )
   }
