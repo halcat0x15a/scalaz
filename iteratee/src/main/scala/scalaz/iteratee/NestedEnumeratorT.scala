@@ -36,9 +36,9 @@ private[iteratee] class NestedEnumeratorT[X, E] {
             outerOpt   <- head[X, E, FGA]
             sa         <- outerOpt match {
                             case Some(e) => 
-                              val i = EnumerateeT.map[X, E, (E, E), FGA, A]((a: E) => (e, a)).apply(step)
-                              val i2 : IterateeT[X, E, FGA, StepM] = (i >>== e2t)
-                              iterateeT[X, (E, E), FGA, A](i2.run(x => err[X, (E, E), FGA, A](x).value)) >>== outerLoop
+                              val pairingIteratee = EnumerateeT.map[X, E, (E, E), FGA, A]((a: E) => (e, a)).apply(step)
+                              val nextStep = (pairingIteratee >>== e2t).run(x => err[X, (E, E), FGA, A](x).value)
+                              iterateeT[X, (E, E), FGA, A](nextStep) >>== outerLoop
 
                             case None    => 
                               done[X, E, FGA, StepM](step, eofInput) 
