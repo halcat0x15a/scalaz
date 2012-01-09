@@ -111,22 +111,6 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
       err  = x => err(x)
     )
   }
-
-  def cross1[A](step: StepT[X, (E, E), F, A]): IterateeT[X, E, IterateeM, StepT[X, (E, E), F, A]] = {
-    step.fold[IterateeT[X, E, IterateeM, StepT[X, (E, E), F, A]]](
-      cont = contf =>
-        for {
-          leftOpt  <- peek[X, E, IterateeM]
-          rightOpt <- lift(head[X, E, F])
-          sa       <- (leftOpt, rightOpt) match {
-                        case (Some(left), Some(right)) => iterateeT[X, E, IterateeM, StepT[X, (E, E), F, A]](contf(elInput((left, right))) >>== (s => cross1(s).value))
-                        case _                         => done[X, E, IterateeM, StepT[X, (E, E), F, A]](step, eofInput)
-                      }
-        } yield sa,
-      done = (_, _) => done(step, emptyInput),
-      err = x => err(x)
-    )
-  }
 }
 
 // vim: set ts=4 sw=4 et:

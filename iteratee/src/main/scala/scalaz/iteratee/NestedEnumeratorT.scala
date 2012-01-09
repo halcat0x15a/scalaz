@@ -5,7 +5,7 @@ import Iteratee._
 
 private[iteratee] class NestedEnumeratorT[X, E] {
   // frequently used type lambdas
-  def lift[A, F[_]: Monad](iter: IterateeT[X, E, F, A]): IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
+  def lift[A, EE, F[_]: Monad](iter: IterateeT[X, EE, F, A]): IterateeT[X, EE, ({type λ[α] = IterateeT[X, EE, F, α]})#λ, A] = IterateeT.IterateeTMonadTrans[X, EE].liftM[({type λ[α] = IterateeT[X, EE, F, α]})#λ, A](iter)
 
   private[iteratee] class FG[F[_[_], _], G[_]] {
     type FGA[A] = F[G, A]
@@ -27,22 +27,26 @@ private[iteratee] class NestedEnumeratorT[X, E] {
       implicit val IterateeTM  = IterateeT.IterateeTMonad[X, E, FGA]
       implicit val IterateeTMT = IterateeT.IterateeTMonadTransT[X, E, F]
 
-      def value = { (step: StepT[X, (E, E), FGA, A]) =>
-        val e1t = e1.apply[({type λ[ƒ[_], α] = IterateeT[X, E, ({type λ[σ] = F[ƒ, σ]})#λ, α]})#λ, StepT[X, (E, E), FGA, A]]
-        val e2t = e2.apply[F, StepT[X, (E, E), FGA, A]]
+      def value: StepM => IterateeT[X, (E, E), FGA, A] = (step: StepM) => {
+        val e1t = e1.apply[F, StepM]
+        val e2t = e2.apply[F, StepM]
 
-        def outerLoop(step: StepT[X,(E, E),this.FGA,A]): IterateeT[X, E, IterateeM, StepT[X, (E, E), FGA, A]] = for {
-          leap <- cross1[X, E, FGA, A].apply(step)
-          _    <- drop[X, E, IterateeM](1)
-          eof  <- isEof[X, E, IterateeM]
-          sa   <- if (eof) lift[StepM, FGA](done[X, E, FGA, StepM](leap, eofInput)) else outerLoop(leap)
-        } yield sa
+        def outerLoop(step: StepM): IterateeT[X, E, FGA, StepM] =
+          for {
+            outerOpt   <- head[X, E, FGA]
+            sa         <- outerOpt match {
+                            case Some(e) => 
+                              val i = EnumerateeT.map[X, E, (E, E), FGA, A]((a: E) => (e, a)).apply(step)
+                              val i2 : IterateeT[X, E, FGA, StepM] = (i >>== e2t)
+                              iterateeT[X, (E, E), FGA, A](i2.run(x => err[X, (E, E), FGA, A](x).value)) >>== outerLoop
 
-        def repeat(s: StepT[X, E, FGA, StepT[X, (E, E), FGA, A]]): IterateeT[X, E, FGA, StepT[X, (E, E), FGA, A]] = e2t(s) >>== repeat
+                            case None    => 
+                              done[X, E, FGA, StepM](step, eofInput) 
+                          }
+          } yield sa
 
         iterateeT[X, (E, E), FGA, A] {
-          ((outerLoop(step) >>== e1t).run(x => iterateeT(err[X, E, FGA, StepT[X, (E, E), FGA, A]](x).value)) >>== repeat)
-          .run(x => err[X, (E, E), FGA, A](x).value)
+          (outerLoop(step) >>== e1t).run(x => err[X, (E, E), FGA, A](x).value)
         }
       }
     }.value
