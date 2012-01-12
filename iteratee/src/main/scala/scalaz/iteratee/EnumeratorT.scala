@@ -132,6 +132,8 @@ trait EnumeratorTFunctions {
 
   def cross[X, E, G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new NestedEnumeratorT[X, E].crossE[G](e1, e2)
 
+  def cogroup[X, E, G[_]](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G])(implicit gm : Monad[G], order : Order[E]): EnumeratorP[X, Either3[E, (E, E), E], G] = new NestedEnumeratorT[X, E].cogroupE[G](e1, e2)
+
   /*
   Full types for recursive case:
   
