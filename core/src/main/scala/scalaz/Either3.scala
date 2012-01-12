@@ -16,6 +16,10 @@ sealed trait Either3[A, B, C] {
     middle = b => Right(Left(b)),
     right  = c => Right(Right(c))
   )
+
+  def leftOr[Z](z: => Z)(f: A => Z) = fold(f, _ => z, _ => z)
+  def middleOr[Z](z: => Z)(f: B => Z) = fold(_ => z, f, _ => z)
+  def rightOr[Z](z: => Z)(f: C => Z) = fold(_ => z, _ => z, f)
 }
 
 object Either3 {

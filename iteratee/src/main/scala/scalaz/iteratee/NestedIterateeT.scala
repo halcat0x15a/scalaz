@@ -9,29 +9,33 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
   import scalaz.syntax.Syntax.order._
 
   type IterateeM[A] = IterateeT[X, E, F, A]
-  def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
 
-  private def end[A, EE](step: StepT[X, EE, F, A]): IterateeT[X, E, F, A] = {
-    step.fold(
-      cont = contf  => iterateeT(contf(eofInput).value >>= (s => end(s).value)), //todo: should throw a diverging iteratee error
-      done = (a, _) => done(a, emptyInput),
-      err  = x      => err(x)
+  type MergeStepT[A] = StepT[X, E, F, A]
+  type MatchStepT[A] = StepT[X, (E, E), F, A]
+  type CogroupStepT[A] = StepT[X, Either3[E, (E, E), E], F, A]
+
+  private def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = 
+    IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
+
+  private def endStep[EE, A](sa: CogroupStepT[A]): StepT[X, EE, F, A] = {
+    sa.fold(
+      cont = sys.error("diverging iteratee"),
+      done = (a, r) => sdone[X, EE, F, A](a, if (r.isEof) eofInput[EE] else emptyInput[EE]),
+      err  = x      => serr[X, EE, F, A](x)
     )
   }
 
-  type MergeStepT[A] = StepT[X, E, F, A]
-
-  def mergeI[A](step: StepT[X, E, F, A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MergeStepT[A]] = {
-    def estep(step: StepT[X, E, F, A]): CogroupStepT[A]  = step.fold(
+  def mergeI[A](step: MergeStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MergeStepT[A]] = {
+    def estep(step: MergeStepT[A]): CogroupStepT[A]  = step.fold(
       cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
         in.fold(
           el = _.fold(
             left   = a => contf(elInput(a)) >>== (s => estep(s).pointI),
             middle = b => contf(elInput(b._1)) >>== { s =>
               s.fold(
-                cont = contf => contf(elInput(b._2)) >>== (s => estep(s).pointI),
-                done = (a, _) => done(a, emptyInput[Either3[E, (E, E), E]]),
-                err  = x => err(x)
+                cont = contf  => contf(elInput(b._2)) >>== (s => estep(s).pointI),
+                done = (a, r) => done(a, if (r.isEof) eofInput else emptyInput),
+                err  = x      => err(x)
               )
             },
             right  = c => contf(elInput(c)) >>== (s => estep(s).pointI)
@@ -40,51 +44,40 @@ private[iteratee] class NestedIterateeT[X, E, F[_]](implicit FMonad: Monad[F]) {
           eof =   contf(eofInput[E]) >>== (s => estep(s).pointI)
         )
       },
-      done = (a, _) => sdone(a, emptyInput[Either3[E, (E, E), E]]),
-      err  = x => serr(x)
-    )
-
-    for (sa <- cogroupI(estep(step))) yield sa.fold(
-      cont = sys.error("diverging iteratee"),
       done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
       err  = x => serr(x)
     )
+
+    cogroupI(estep(step)).map(endStep[E, A])
   }
 
-  type MatchStepT[A] = StepT[X, (E, E), F, A]
+  def mergeDistinctI[A](step: MergeStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MergeStepT[A]] = {
+    def estep(step: MergeStepT[A]): CogroupStepT[A]  = step.fold(
+      cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+        val nextInput = in.map(_.fold(identity[E], _._1, identity[E]))
+
+        contf(nextInput) >>== (s => estep(s).pointI)
+      },
+      done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
+      err  = x => serr(x)
+    )
+
+    cogroupI(estep(step)).map(endStep[E, A])
+  }
 
   def matchI[A](step: MatchStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MatchStepT[A]] = {
-    step.fold[IterateeT[X, E, IterateeM, MatchStepT[A]]](
-      cont = contf => {
-        for {
-          leftOpt <- head[X, E, IterateeM]
+    def estep(step: MatchStepT[A]): CogroupStepT[A] = step.fold(
+      cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+        val nextInput = in.flatMap(_.middleOr(emptyInput[(E, E)]) { elInput(_) })
 
-          rightOpt <- lift(leftOpt.map { left =>
-                        for {
-                          _        <- dropWhile[X, E, F](_ < left)
-                          rightOpt <- peek[X, E, F]
-                        } yield rightOpt
-                      }.getOrElse(done[X, E, F, Option[E]](None, eofInput)))
-          
-          val leftRightOpt = for { left <- leftOpt; right <- rightOpt } yield (left, right)
-
-          a <- leftRightOpt match {
-            case Some((left, right)) if (left ?|? right == Ordering.EQ) => 
-              val joined = contf(elInput((left, right))) >>== (s => matchI(s).value)
-              IterateeT[X, E, IterateeM, MatchStepT[A]](joined)
-
-            case Some(_) => matchI(step)
-
-            case None => done(step, eofInput)
-          }
-        } yield a
+        contf(nextInput) >>== (s => estep(s).pointI)
       },
-      done = (a, r) => done(sdone(a, if (r.isEof) eofInput else emptyInput), if (r.isEof) eofInput else emptyInput),
-      err  = x => err(x)
+      done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
+      err  = x => serr(x)
     )
+    
+    cogroupI(estep(step)).map(endStep[(E, E), A])
   }
-
-  type CogroupStepT[A] = StepT[X, Either3[E, (E, E), E], F, A]
 
   def cogroupI[A](step: CogroupStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, CogroupStepT[A]] = {
     import Either3._

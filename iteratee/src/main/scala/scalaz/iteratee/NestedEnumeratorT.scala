@@ -75,7 +75,6 @@ private[iteratee] class NestedEnumeratorT[X, E] {
   def matchE[G[_]](e1 : EnumeratorP[X, E, G], e2 : EnumeratorP[X, E, G])(implicit gm : Monad[G], order : Order[E]) = new EnumeratorP[X, (E, E), G] {
     def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, (E, E), FG[F, G]#FGA, A] = new Value[EnumeratorT[X, (E, E), FG[F, G]#FGA, A]] {
 
-      import Either3._
       import t.apply
       type FGA[α] = FG[F, G]#FGA[α]
       type StepM = StepT[X, (E, E), FGA, A]
@@ -84,8 +83,7 @@ private[iteratee] class NestedEnumeratorT[X, E] {
       val e2t = e2.apply[F, StepM]
 
       val value : StepM => IterateeT[X, (E, E), FGA, A] = (step : StepM) => {
-        (matchI[X, E, FGA, A](step) >>== e1t).run(err _) >>== e2t
-        //iterateeT(((matchI[X, E, FGA, A](step) >>== e1t).run(err _) >>== e2t).run(x => t.liftM(gm.point(serr(x)))))
+        iterateeT(((matchI[X, E, FGA, A](step) >>== e1t).run(err _) >>== e2t).run(x => t.liftM(gm.point(serr(x)))))
       }
     }.value
   }
