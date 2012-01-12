@@ -7,11 +7,13 @@ import Iteratee._
 object Enumeratee2T extends Enumeratee2TFunctions
 
 trait Enumeratee2TFunctions {
-  def matchI[X, E: Order, F[_]: Monad, A](step: StepT[X, (E, E), F, A]) = (new XEF[X, E, F]).matchI(step)
+  def matchI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, (E, E), F, A] = (step: StepT[X, (E, E), F, A]) => (new XEF[X, E, F]).matchI(step)
 
-  def mergeI[X, E: Order, F[_]: Monad, A](step: StepT[X, E, F, A]) = (new XEF[X, E, F]).mergeI(step)
+  def mergeI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = (step: StepT[X, E, F, A]) => (new XEF[X, E, F]).mergeI(step)
   
-  def cogroupI[X, E: Order, F[_]: Monad, A](step: StepT[X, Either3[E, (E, E), E], F, A]) = (new XEF[X, E, F]).cogroupI(step)
+  def mergeDistinctI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = (step: StepT[X, E, F, A]) => (new XEF[X, E, F]).mergeDistinctI(step)
+  
+  def cogroupI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, Either3[E, (E, E), E], F, A] = (step: StepT[X, Either3[E, (E, E), E], F, A]) => (new XEF[X, E, F]).cogroupI(step)
 
   private class XEF[X, E, F[_]](implicit FMonad: Monad[F]) {
     import scalaz.syntax.Syntax.bind._
