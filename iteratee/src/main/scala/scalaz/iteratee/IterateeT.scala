@@ -328,12 +328,6 @@ trait IterateeTFunctions {
    * An iteratee that checks if the input is EOF.
    */
   def isEof[X, E, F[_] : Pointed]: IterateeT[X, E, F, Boolean] = cont(in => done(in.isEof, in))
-  
-  def matchI[X, E: Order, F[_]: Monad, A](step: StepT[X, (E, E), F, A]) = (new NestedIterateeT).matchI(step)
-
-  def mergeI[X, E: Order, F[_]: Monad, A](step: StepT[X, E, F, A]) = (new NestedIterateeT).mergeI(step)
-  
-  def cogroupI[X, E: Order, F[_]: Monad, A](step: StepT[X, Either3[E, (E, E), E], F, A]) = (new NestedIterateeT).cogroupI(step)
 }
 
 //
