@@ -237,8 +237,8 @@ trait IterateeTFunctions {
     import scalaz.syntax.plus._
     def step(e: Input[E]): IterateeT[X, E, F, A[E]] = 
       e.fold(empty = cont(step)
-        , el = e => cont(step).map(a => implicitly[Pointed[A]].point(e) <+> a)
-        , eof = done(implicitly[Empty[A]].empty, eofInput[E])
+        , el = e => cont(step).map(a => Pointed[A].point(e) <+> a)
+        , eof = done(Empty[A].empty, eofInput[E])
       )   
 
     cont(step)
@@ -329,8 +329,8 @@ trait IterateeTFunctions {
    */
   def isEof[X, E, F[_] : Pointed]: IterateeT[X, E, F, Boolean] = cont(in => done(in.isEof, in))
 
-  def sum[X, E: Monoid, F: Pointed]: IterateeT[X, E, F, E] = 
-    foldM[X, E, F, E](implicitly[Monoid[E]].zero)((a, e) => implicitly[Monoid[E]].append(a, e))
+  def sum[X, E: Monoid, F[_]: Monad]: IterateeT[X, E, F, E] = 
+    foldM[X, E, F, E](Monoid[E].zero)((a, e) => Pointed[F].point(Monoid[E].append(a, e)))
 }
 
 //

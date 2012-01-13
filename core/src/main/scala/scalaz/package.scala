@@ -77,8 +77,6 @@ package object scalaz {
    */
   type Id[X] = X
 
-  //type IdT[F[_], X] = F[X]
-
   /**
    * Type class instance for the strict identity type constructor
    *
@@ -89,12 +87,6 @@ package object scalaz {
   implicit val idInstance = Id.id
 
   object Id extends IdInstances {
-  }
-
-  object IdT extends IdTInstances {
-    def apply[F[_], A](fa: F[A]): IdT[F, A] = new IdT[F, A] {
-      val value = fa
-    }
   }
 
   // TODO Review!
