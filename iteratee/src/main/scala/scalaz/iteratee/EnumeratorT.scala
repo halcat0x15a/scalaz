@@ -51,6 +51,10 @@ trait EnumeratorTFunctions {
           i.fold(done = (_, _) => i, cont = k => enumerate(xs)(k(elInput(x)).value), err = e => err[Unit, A, Id, O](e).value)
       }
 
+  def enumE[X, E, F[_]: Pointed, A](e: E): EnumeratorT[X, E, F, A] = 
+    s => s.mapCont(f => f(elInput(e)))
+  
+
   implicit def enumStream[X, E, F[_] : Monad, A](xs: Stream[E]): EnumeratorT[X, E, F, A] = {
     s =>
       xs match {
@@ -87,6 +91,18 @@ trait EnumeratorTFunctions {
         )
     }
     loop
+  }
+
+  implicit def enumArray[X, E, F[_]: Monad, A](a : Array[E]) : EnumeratorT[X, E, F, A] = { 
+    def loop(pos : Int) : EnumeratorT[X, E, F, A] = { 
+      s => 
+        s.mapCont(
+          k => if (pos == a.length) k(eofInput)
+               else                 k(elInput(a(pos))) >>== loop(pos + 1)
+        )   
+    }   
+
+    loop(0)
   }
 
   def checkCont0[X, E, F[_], A](z: EnumeratorT[X, E, F, A] => (Input[E] => IterateeT[X, E, F, A]) => IterateeT[X, E, F, A])(implicit p: Pointed[F]): EnumeratorT[X, E, F, A] = {
