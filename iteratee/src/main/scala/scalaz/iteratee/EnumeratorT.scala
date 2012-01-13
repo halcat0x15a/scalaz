@@ -2,9 +2,6 @@ package scalaz
 package iteratee
 
 import effect._
-import scalaz.syntax.Syntax.bind._
-import scalaz.syntax.Syntax.order._
-
 import Iteratee._
 
 trait EnumeratorTInstances0 {
@@ -129,23 +126,6 @@ trait EnumeratorTFunctions {
         , err = _ => d
       )
   }
-  /*
-  Full types for recursive case:
-  
-    val m3: F[StepT[X, E, F, StepT[X, E, IterateeM, A]]] = contf(elInput((left, right))).value >>= { step: StepT[X, (E, E), F, A] =>
-      val m1: IterateeT[X, E, IterateeM, A] = matchE(step)
-      val m2: IterateeM[StepT[X, E, IterateeM, A]] = m1.value
-      val m3: F[StepT[X, E, F, StepT[X, E, IterateeM, A]]] = m2.value
-    
-      m3
-    }
-  
-    val m2: IterateeM[StepT[X, E, IterateeM, A]] = IterateeT(m3)
-  
-    val m1: IterateeT[X, E, IterateeM, A] = IterateeT(m2)
-  
-    m1
-  */
 }
 
 //

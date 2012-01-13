@@ -328,6 +328,9 @@ trait IterateeTFunctions {
    * An iteratee that checks if the input is EOF.
    */
   def isEof[X, E, F[_] : Pointed]: IterateeT[X, E, F, Boolean] = cont(in => done(in.isEof, in))
+
+  def sum[X, E: Monoid, F: Pointed]: IterateeT[X, E, F, E] = 
+    foldM[X, E, F, E](implicitly[Monoid[E]].zero)((a, e) => implicitly[Monoid[E]].append(a, e))
 }
 
 //
