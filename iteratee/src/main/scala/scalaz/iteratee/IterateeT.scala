@@ -231,14 +231,14 @@ trait IterateeTFunctions {
   }
 
   /**
-   * An iteratee that consumes all of the input into something that is Empty and Pointed. Useful for testing.
+   * An iteratee that consumes all of the input into something that is PlusEmpty and Pointed. Useful for testing.
    */
-  def consume[X, E, F[_]: Monad, A[_]: Empty : Pointed]: IterateeT[X, E, F, A[E]] = {
+  def consume[X, E, F[_]: Monad, A[_]: PlusEmpty : Pointed]: IterateeT[X, E, F, A[E]] = {
     import scalaz.syntax.plus._
     def step(e: Input[E]): IterateeT[X, E, F, A[E]] = 
       e.fold(empty = cont(step)
         , el = e => cont(step).map(a => Pointed[A].point(e) <+> a)
-        , eof = done(Empty[A].empty, eofInput[E])
+        , eof = done(PlusEmpty[A].empty, eofInput[E])
       )   
 
     cont(step)
