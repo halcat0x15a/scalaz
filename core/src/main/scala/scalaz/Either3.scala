@@ -3,68 +3,54 @@ package scalaz
 import scalaz.syntax.equal._
 import scalaz.syntax.show._
 
-sealed trait Either3[A, B, C] {
-  def fold[Z](left: A => Z, middle: B => Z, right: C => Z): Z
-  def eitherLeft:  Either[Either[A, B], C] = fold( 
-    left   = a => Left(Left(a)),
-    middle = b => Left(Right(b)),
-    right  = c => Right(c)
-  )
+sealed trait Either3[+A, +B, +C] {
+  def fold[Z](left: A => Z, middle: B => Z, right: C => Z): Z = this match {
+    case Left3(a)   => left(a)
+    case Middle3(b) => middle(b)
+    case Right3(c)  => right(c)
+  }
 
-  def eitherRight: Either[A, Either[B, C]] = fold( 
-    left   = a => Left(a),
-    middle = b => Right(Left(b)),
-    right  = c => Right(Right(c))
-  )
+  def eitherLeft:  Either[Either[A, B], C] = this match {
+    case Left3(a)   => Left(Left(a))
+    case Middle3(b) => Left(Right(b))
+    case Right3(c)  => Right(c)
+  }
 
-  def leftOr[Z](z: => Z)(f: A => Z) = fold(f, _ => z, _ => z)
+  def eitherRight: Either[A, Either[B, C]] = this match {
+    case Left3(a)   => Left(a)
+    case Middle3(b) => Right(Left(b))
+    case Right3(c)  => Right(Right(c))
+  }
+
+  def leftOr[Z](z: => Z)(f: A => Z)   = fold(f, _ => z, _ => z)
   def middleOr[Z](z: => Z)(f: B => Z) = fold(_ => z, f, _ => z)
-  def rightOr[Z](z: => Z)(f: C => Z) = fold(_ => z, _ => z, f)
+  def rightOr[Z](z: => Z)(f: C => Z)  = fold(_ => z, _ => z, f)
 }
 
+case class Left3[+A, +B, +C](a: A) extends Either3[A, B, C]
+case class Middle3[+A, +B, +C](b: B) extends Either3[A, B, C]
+case class Right3[+A, +B, +C](c: C) extends Either3[A, B, C]
+
 object Either3 {
-  def left3[A, B, C](a: A) = new Either3[A, B, C] {
-    def fold[Z](left: A => Z, middle: B => Z, right: C => Z): Z = left(a)
-  }
-
-  def middle3[A, B, C](b: B) = new Either3[A, B, C] {
-    def fold[Z](left: A => Z, middle: B => Z, right: C => Z): Z = middle(b)
-  }
-
-  def right3[A, B, C](c: C) = new Either3[A, B, C] {
-    def fold[Z](left: A => Z, middle: B => Z, right: C => Z): Z = right(c)
-  }
+  def left3[A, B, C](a: A):   Either3[A, B, C] = Left3(a)
+  def middle3[A, B, C](b: B): Either3[A, B, C] = Middle3(b)
+  def right3[A, B, C](c: C):  Either3[A, B, C] = Right3(c)
 
   implicit def equal[A: Equal, B: Equal, C: Equal]: Equal[Either3[A, B, C]] = new Equal[Either3[A, B, C]] {
-    def equal(a1: Either3[A, B, C], a2: Either3[A, B, C]) = {
-      a1.fold(
-        a => a2.fold(
-          aa => a === aa,
-          bb => false,
-          cc => false
-        ),
-        b => a2.fold(
-          aa => false,
-          bb => b === bb,
-          cc => false
-        ),
-        c => a2.fold(
-          aa => false,
-          bb => false,
-          cc => c === cc
-        )
-      )
+    def equal(e1: Either3[A, B, C], e2: Either3[A, B, C]) = (e1, e2) match {
+      case (Left3(a1),   Left3(a2))   => a1 === a2
+      case (Middle3(b1), Middle3(b2)) => b1 === b2
+      case (Right3(c1),  Right3(c2))  => c1 === c2
+      case _ => false
     }
   }
 
   implicit def show[A: Show, B: Show, C: Show]: Show[Either3[A, B, C]] = new Show[Either3[A, B, C]] {
     def show(v: Either3[A, B, C]) = shows(v).toCharArray.toList
-    override def shows(v: Either3[A, B, C]) = {
-      v.fold(
-        a => "Left3(" + a.shows + ")",
-        b => "Middle3(" + b.shows + ")",
-        c => "Right3(" + c.shows + ")"
-      )
+    override def shows(v: Either3[A, B, C]) = v match {
+      case Left3(a)   => "Left3(" + a.shows + ")"
+      case Middle3(b) => "Middle3(" + b.shows + ")"
+      case Right3(c)  => "Right3(" + c.shows + ")"
     }
   }
 }
