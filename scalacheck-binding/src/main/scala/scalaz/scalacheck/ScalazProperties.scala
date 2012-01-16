@@ -203,14 +203,14 @@ object ScalazProperties {
     }
   }
 
-  object empty {
-    def leftPlusIdentity[F[_], X](implicit f: Empty[F], afx: Arbitrary[F[X]], ef: Equal[F[X]]) =
+  object plusEmpty {
+    def leftPlusIdentity[F[_], X](implicit f: PlusEmpty[F], afx: Arbitrary[F[X]], ef: Equal[F[X]]) =
       forAll(f.emptyLaw.leftPlusIdentity[X] _)
 
-    def rightPlusIdentity[F[_], X](implicit f: Empty[F], afx: Arbitrary[F[X]], ef: Equal[F[X]]) =
+    def rightPlusIdentity[F[_], X](implicit f: PlusEmpty[F], afx: Arbitrary[F[X]], ef: Equal[F[X]]) =
       forAll(f.emptyLaw.rightPlusIdentity[X] _)
 
-    def laws[F[_]](implicit F: Empty[F], afx: Arbitrary[F[Int]], af: Arbitrary[Int => Int], ef: Equal[F[Int]]) = new Properties("empty") {
+    def laws[F[_]](implicit F: PlusEmpty[F], afx: Arbitrary[F[Int]], af: Arbitrary[Int => Int], ef: Equal[F[Int]]) = new Properties("plusEmpty") {
       include(plus.laws[F])
       include(monoid.laws[F[Int]](F.monoid[Int], implicitly, implicitly))
       property("left plus identity") = leftPlusIdentity[F, Int]
@@ -230,10 +230,21 @@ object ScalazProperties {
 
     def laws[F[_]](implicit F: MonadPlus[F], afx: Arbitrary[F[Int]], afy: Arbitrary[F[Int => Int]], ef: Equal[F[Int]]) = new Properties("monad plus") {
       include(monad.laws[F])
-      include(empty.laws[F])
+      include(plusEmpty.laws[F])
       property("empty map") = emptyMap[F, Int]
       property("left zero") = leftZero[F, Int]
       property("right zero") = rightZero[F, Int]
+    }
+  }
+
+  object compose {
+    def associative[=>:[_, _], A, B, C, D](implicit ab: Arbitrary[A =>: B], bc: Arbitrary[B =>: C],
+                                           cd: Arbitrary[C =>: D], C: Compose[=>:], E: Equal[A =>: D]) =
+      forAll(C.composeLaw.associative[A, B, C, D] _)
+
+    def laws[=>:[_, _]](implicit C: Category[=>:], AB: Arbitrary[Int =>: Int], E: Equal[Int =>: Int]) = new Properties("category") {
+      property("associative") = associative[=>:, Int, Int, Int, Int]
+      include(semigroup.laws[Int =>: Int](C.semigroup[Int], implicitly, implicitly))
     }
   }
 
@@ -244,14 +255,11 @@ object ScalazProperties {
     def rightIdentity[=>:[_, _], A, B](implicit ab: Arbitrary[A =>: B], C: Category[=>:], E: Equal[A =>: B]) =
       forAll(C.categoryLaw.rightIdentity[A, B] _)
 
-    def associative[=>:[_, _], A, B, C, D](implicit ab: Arbitrary[A =>: B], bc: Arbitrary[B =>: C],
-                                           cd: Arbitrary[C =>: D], C: Category[=>:], E: Equal[A =>: D]) =
-      forAll(C.categoryLaw.associative[A, B, C, D] _)
-
     def laws[=>:[_, _]](implicit C: Category[=>:], AB: Arbitrary[Int =>: Int], E: Equal[Int =>: Int]) = new Properties("category") {
+      include(compose.laws[=>:])
       property("left identity") = leftIdentity[=>:, Int, Int]
       property("right identity") = rightIdentity[=>:, Int, Int]
-      property("associative") = associative[=>:, Int, Int, Int, Int]
+      include(monoid.laws[Int =>: Int](C.monoid[Int], implicitly, implicitly))
     }
   }
 
