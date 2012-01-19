@@ -93,16 +93,17 @@ trait EnumeratorTFunctions {
     loop
   }
 
-  implicit def enumArray[X, E, F[_]: Monad, A](a : Array[E]) : EnumeratorT[X, E, F, A] = { 
+  implicit def enumArray[X, E, F[_]: Monad, A](a : Array[E], min: Int = 0, max: Option[Int] = None) : EnumeratorT[X, E, F, A] = { 
+    val limit = max.getOrElse(a.length)
     def loop(pos : Int) : EnumeratorT[X, E, F, A] = { 
       s => 
         s.mapCont(
-          k => if (pos == a.length) k(eofInput)
-               else                 k(elInput(a(pos))) >>== loop(pos + 1)
+          k => if (pos == limit) k(eofInput)
+               else              k(elInput(a(pos))) >>== loop(pos + 1)
         )   
     }   
 
-    loop(0)
+    loop(min)
   }
 
   def checkCont0[X, E, F[_], A](z: EnumeratorT[X, E, F, A] => (Input[E] => IterateeT[X, E, F, A]) => IterateeT[X, E, F, A])(implicit p: Pointed[F]): EnumeratorT[X, E, F, A] = {
