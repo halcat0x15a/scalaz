@@ -8,9 +8,7 @@ import std.option.optionInstance
 final case class OptionT[F[_], A](run: F[Option[A]]) {
   self =>
 
-  def map[B](f: A => B)(implicit F: Functor[F]): OptionT[F, B] = new OptionT[F, B](
-    F.map(run)(_ map f)
-  )
+  def map[B](f: A => B)(implicit F: Functor[F]): OptionT[F, B] = new OptionT[F, B](mapO(_ map f))
 
   def flatMap[B](f: A => OptionT[F, B])(implicit F: Monad[F]): OptionT[F, B] = new OptionT[F, B](
     F.bind(self.run) {
@@ -40,6 +38,26 @@ final case class OptionT[F[_], A](run: F[Option[A]]) {
     OptionT(F.map2(f.run, run) {
       case (ff, aa) => optionInstance.ap(aa)(ff)
     })
+
+  def isDefined(implicit F: Functor[F]): F[Boolean] = mapO(_.isDefined)
+
+  def isEmpty(implicit F: Functor[F]): F[Boolean] = mapO(_.isEmpty)
+
+  def fold[X](some: A => X, none: => X)(implicit F: Functor[F]): F[X] =
+    mapO {
+      case None => none
+      case Some(a) => some(a)
+    }
+
+  def getOrElse(default: => A)(implicit F: Functor[F]): F[A] = mapO(_.getOrElse(default))
+
+  def exists(f: A => Boolean)(implicit F: Functor[F]): F[Boolean] = mapO(_.exists(f))
+
+  def forall(f: A => Boolean)(implicit F: Functor[F]): F[Boolean] = mapO(_.forall(f))
+
+  def orElse(a: => Option[A])(implicit F: Functor[F]): OptionT[F, A] = OptionT(mapO(_.orElse(a)))
+
+  private def mapO[B](f: Option[A] => B)(implicit F: Functor[F]) = F.map(run)(f)
 }
 
 //
@@ -56,11 +74,14 @@ trait OptionTInstances1 extends OptionTInstances2 {
   implicit def optionTPointed[F[_]](implicit F0: Pointed[F]): Pointed[({type λ[α] = OptionT[F, α]})#λ] = new OptionTPointed[F] {
     implicit def F: Pointed[F] = F0
   }
+  implicit def optionTApply[F[_]](implicit F0: Apply[F]): Apply[({type λ[α] = OptionT[F, α]})#λ] = new OptionTApply[F] {
+    implicit def F: Apply[F] = F0
+  }
 }
 
 trait OptionTInstances0 extends OptionTInstances1 {
-  implicit def optionTApply[F[_]](implicit F0: Apply[F]): Apply[({type λ[α] = OptionT[F, α]})#λ] = new OptionTApply[F] {
-    implicit def F: Apply[F] = F0
+  implicit def optionTAlternative[F[_]](implicit F0: Alternative[F]): Alternative[({type λ[α] = OptionT[F, α]})#λ] = new OptionTAlternative[F] {
+    implicit def F: Alternative[F] = F0
   }
   implicit def optionTFoldable[F[_]](implicit F0: Foldable[F]): Foldable[({type λ[α] = OptionT[F, α]})#λ] = new OptionTFoldable[F] {
     implicit def F: Foldable[F] = F0
@@ -127,6 +148,12 @@ private[scalaz] trait OptionTTraverse[F[_]] extends Traverse[({type λ[α] = Opt
   implicit def F: Traverse[F]
 
   def traverseImpl[G[_] : Applicative, A, B](fa: OptionT[F, A])(f: (A) => G[B]): G[OptionT[F, B]] = fa traverse f
+}
+
+trait OptionTAlternative[F[_]] extends Alternative[({type λ[α] = OptionT[F, α]})#λ] with OptionTApply[F] with OptionTPointed[F] {
+  implicit def F: Alternative[F]
+  
+  def orElse[A](a: OptionT[F, A], b: => OptionT[F, A]): OptionT[F, A] = OptionT(F.orElse(a.run, b.run))
 }
 
 private[scalaz] trait OptionTMonadTrans extends MonadTrans[OptionT] {
