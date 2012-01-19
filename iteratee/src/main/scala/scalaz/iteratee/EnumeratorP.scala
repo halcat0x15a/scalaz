@@ -19,9 +19,6 @@ abstract class EnumeratorP[X, E, G[_]: Monad] {
 
 trait EnumeratorPFunctions {
   import EnumeratorP._
-  private trait Value[A] {
-    def value: A
-  }
 
   implicit def enumPStream[X, E, G[_]: Monad](xs : Stream[E]) = new EnumeratorP[X, E, G] {
     def apply[F[_[_],_], A](implicit t: MonadTrans[F]) = {
@@ -31,7 +28,7 @@ trait EnumeratorPFunctions {
   }
 
   def crossE[X, E, G[_]: Monad](e1: EnumeratorP[X, E, G], e2: EnumeratorP[X, E, G]): EnumeratorP[X, (E, E), G] = new EnumeratorP[X, (E, E), G] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, (E, E), ({type λ[α] = F[G, α]})#λ, A] = new Value[EnumeratorT[X, (E, E), ({type λ[α] = F[G, α]})#λ, A]] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, (E, E), ({type λ[α] = F[G, α]})#λ, A] = {
       import t.apply
       type FG[α] = F[G, α]
       type IterateeM[α] = IterateeT[X, E, FG, A]
@@ -40,7 +37,7 @@ trait EnumeratorPFunctions {
       implicit val IterateeTM  = IterateeT.IterateeTMonad[X, E, FG]
       implicit val IterateeTMT = IterateeT.IterateeTMonadTransT[X, E, F]
 
-      def value: StepM => IterateeT[X, (E, E), FG, A] = (step: StepM) => {
+      (step: StepM) => {
         val e1t = e1.apply[F, StepM]
         val e2t = e2.apply[F, StepM]
 
@@ -62,24 +59,20 @@ trait EnumeratorPFunctions {
           (outerLoop(step) >>== e1t).run(x => err[X, (E, E), FG, A](x).value)
         }
       }
-    }.value
+    }
   }
 
   def liftE[X, O, I, G[_]: Monad](e2t: ForallM[({type λ[β[_], α] = Enumeratee2T[X, O, I, β, α]})#λ]): (EnumeratorP[X, O, G], EnumeratorP[X, O, G]) => EnumeratorP[X, I, G] = {
     (e1: EnumeratorP[X, O, G], e2: EnumeratorP[X, O, G]) => new EnumeratorP[X, I, G] {
       def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ, A] = {
-        new Value[EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ, A]] {
-          import t.apply
-          type FG[α] = F[G, α]
-          type StepM = StepT[X, I, FG, A]
+        import t.apply
+        type FG[α] = F[G, α]
+        type StepM = StepT[X, I, FG, A]
 
-          val enum1 = e1.apply[({ type λ[β[_], α] = IterateeT[X, O, ({ type λ[γ] = F[β, γ] })#λ, α]})#λ, StepM]
-          val enum2 = e2.apply[F, StepM]
+        val enum1 = e1.apply[({ type λ[β[_], α] = IterateeT[X, O, ({ type λ[γ] = F[β, γ] })#λ, α]})#λ, StepM]
+        val enum2 = e2.apply[F, StepM]
 
-          val value : StepM => IterateeT[X, I, FG, A] = (step : StepM) => {
-            iterateeT(((e2t[FG, A].apply(step) >>== enum1).run(err _) >>== enum2).run(x => t.liftM(implicitly[Monad[G]].point(serr(x)))))
-          }
-        }.value
+        (step : StepM) => iterateeT(((e2t[FG, A].apply(step) >>== enum1).run(err _) >>== enum2).run(x => t.liftM(implicitly[Monad[G]].point(serr(x)))))
       }
     }
   }

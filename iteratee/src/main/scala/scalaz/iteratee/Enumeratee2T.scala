@@ -7,92 +7,19 @@ import Iteratee._
 object Enumeratee2T extends Enumeratee2TFunctions
 
 trait Enumeratee2TFunctions {
-  def matchI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, (E, E), F, A] = (step: StepT[X, (E, E), F, A]) => (new XEF[X, E, F]).matchI(step)
+  import scalaz.syntax.Syntax.bind._
+  import scalaz.syntax.Syntax.order._
 
-  def mergeI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = (step: StepT[X, E, F, A]) => (new XEF[X, E, F]).mergeI(step)
-  
-  def mergeDistinctI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = (step: StepT[X, E, F, A]) => (new XEF[X, E, F]).mergeDistinctI(step)
-  
-  def cogroupI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, Either3[E, (E, E), E], F, A] = (step: StepT[X, Either3[E, (E, E), E], F, A]) => (new XEF[X, E, F]).cogroupI(step)
-
-  private class XEF[X, E, F[_]](implicit FMonad: Monad[F]) {
-    import scalaz.syntax.Syntax.bind._
-    import scalaz.syntax.Syntax.order._
-
+  def cogroupI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, Either3[E, (E, E), E], F, A] = {
     type IterateeM[A] = IterateeT[X, E, F, A]
+    type StepM[A] = StepT[X, Either3[E, (E, E), E], F, A]
 
-    type MergeStepT[A] = StepT[X, E, F, A]
-    type MatchStepT[A] = StepT[X, (E, E), F, A]
-    type CogroupStepT[A] = StepT[X, Either3[E, (E, E), E], F, A]
-
-    private def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = 
+    @inline def lift[A](iter: IterateeT[X, E, F, A]): IterateeT[X, E, IterateeM, A] = 
       IterateeT.IterateeTMonadTrans[X, E].liftM[({type λ[α] = IterateeT[X, E, F, α]})#λ, A](iter)
 
-    private def endStep[EE, A](sa: CogroupStepT[A]): StepT[X, EE, F, A] = {
-      sa.fold(
-        cont = sys.error("diverging iteratee"),
-        done = (a, r) => sdone[X, EE, F, A](a, if (r.isEof) eofInput[EE] else emptyInput[EE]),
-        err  = x      => serr[X, EE, F, A](x)
-      )
-    }
-
-    def mergeI[A](step: MergeStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MergeStepT[A]] = {
-      def estep(step: MergeStepT[A]): CogroupStepT[A]  = step.fold(
-        cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
-          in.fold(
-            el = _.fold(
-              left   = a => contf(elInput(a)) >>== (s => estep(s).pointI),
-              middle = b => contf(elInput(b._1)) >>== { s =>
-                s.fold(
-                  cont = contf  => contf(elInput(b._2)) >>== (s => estep(s).pointI),
-                  done = (a, r) => done(a, if (r.isEof) eofInput else emptyInput),
-                  err  = x      => err(x)
-                )
-              },
-              right  = c => contf(elInput(c)) >>== (s => estep(s).pointI)
-            ),
-            empty = contf(emptyInput[E]) >>== (s => estep(s).pointI), 
-            eof =   contf(eofInput[E]) >>== (s => estep(s).pointI)
-          )
-        },
-        done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
-        err  = x => serr(x)
-      )
-
-      cogroupI(estep(step)).map(endStep[E, A])
-    }
-
-    def mergeDistinctI[A](step: MergeStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MergeStepT[A]] = {
-      def estep(step: MergeStepT[A]): CogroupStepT[A]  = step.fold(
-        cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
-          val nextInput = in.map(_.fold(identity[E], _._1, identity[E]))
-
-          contf(nextInput) >>== (s => estep(s).pointI)
-        },
-        done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
-        err  = x => serr(x)
-      )
-
-      cogroupI(estep(step)).map(endStep[E, A])
-    }
-
-    def matchI[A](step: MatchStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, MatchStepT[A]] = {
-      def estep(step: MatchStepT[A]): CogroupStepT[A] = step.fold(
-        cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
-          val nextInput = in.flatMap(_.middleOr(emptyInput[(E, E)]) { elInput(_) })
-
-          contf(nextInput) >>== (s => estep(s).pointI)
-        },
-        done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
-        err  = x => serr(x)
-      )
-      
-      cogroupI(estep(step)).map(endStep[(E, E), A])
-    }
-
-    def cogroupI[A](step: CogroupStepT[A])(implicit order: Order[E]): IterateeT[X, E, IterateeM, CogroupStepT[A]] = {
+    def loop[A](step: StepM[A]): IterateeT[X, E, IterateeM, StepM[A]] = {
       import Either3._
-      step.fold[IterateeT[X, E, IterateeM, CogroupStepT[A]]](
+      step.fold[IterateeT[X, E, IterateeM, StepM[A]]](
         cont = contf => {
           for {
             leftOpt  <- peek[X, E, IterateeM]
@@ -101,30 +28,94 @@ trait Enumeratee2TFunctions {
               case (left, Some(right)) if left.forall(right < _) => 
                 for {
                   right <- lift(head[X, E, F])
-                  a <- iterateeT[X, E, IterateeM, CogroupStepT[A]](contf(elInput(right3(right.get))) >>== (s => cogroupI(s).value))
+                  a <- iterateeT[X, E, IterateeM, StepM[A]](contf(elInput(right3(right.get))) >>== (s => loop(s).value))
                 } yield a
 
               case (Some(left), right) if right.forall(_ > left) => 
                 for {
                   left <- head[X, E, IterateeM]
-                  a <- iterateeT[X, E, IterateeM, CogroupStepT[A]](contf(elInput(left3(left.get))) >>== (s => cogroupI(s).value))
+                  a <- iterateeT[X, E, IterateeM, StepM[A]](contf(elInput(left3(left.get))) >>== (s => loop(s).value))
                 } yield a
           
               case (Some(left), Some(right)) => 
                 for {
                   left <- head[X, E, IterateeM]
                   right <- lift(head[X, E, F])
-                  a <- iterateeT[X, E, IterateeM, CogroupStepT[A]](contf(elInput(middle3((left.get, right.get)))) >>== (s => cogroupI(s).value))
+                  a <- iterateeT[X, E, IterateeM, StepM[A]](contf(elInput(middle3((left.get, right.get)))) >>== (s => loop(s).value))
                 } yield a
 
-              case _ => done[X, E, IterateeM, CogroupStepT[A]](step, eofInput)
+              case _ => done[X, E, IterateeM, StepM[A]](step, eofInput)
             }
           } yield a
         },
-        done = (a, r) => done[X, E, IterateeM, CogroupStepT[A]](sdone(a, if (r.isEof) eofInput else emptyInput), if (r.isEof) eofInput else emptyInput), 
+        done = (a, r) => done[X, E, IterateeM, StepM[A]](sdone(a, if (r.isEof) eofInput else emptyInput), if (r.isEof) eofInput else emptyInput), 
         err  = x => err(x)
       )
     }
+    
+    loop _
+  }
+
+  def matchI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, (E, E), F, A] = {
+    def cstep(step: StepT[X, (E, E), F, A]): StepT[X, Either3[E, (E, E), E], F, A] = step.fold(
+      cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+        val nextInput = in.flatMap(_.middleOr(emptyInput[(E, E)]) { elInput(_) })
+
+        contf(nextInput) >>== (s => cstep(s).pointI)
+      },
+      done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
+      err  = x => serr(x)
+    )
+      
+    (step: StepT[X, (E, E), F, A]) => cogroupI.apply(cstep(step)).map(endStep[X, E, (E, E), F, A])
+  }
+
+  def mergeI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = {
+    def cstep(step: StepT[X, E, F, A]): StepT[X, Either3[E, (E, E), E], F, A] = step.fold(
+      cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+        in.fold(
+          el = _.fold(
+            left   = a => contf(elInput(a)) >>== (s => cstep(s).pointI),
+            middle = b => contf(elInput(b._1)) >>== { s =>
+              s.fold(
+                cont = contf  => contf(elInput(b._2)) >>== (s => cstep(s).pointI),
+                done = (a, r) => done(a, if (r.isEof) eofInput else emptyInput),
+                err  = x      => err(x)
+              )
+            },
+            right  = c => contf(elInput(c)) >>== (s => cstep(s).pointI)
+          ),
+          empty = contf(emptyInput[E]) >>== (s => cstep(s).pointI), 
+          eof =   contf(eofInput[E]) >>== (s => cstep(s).pointI)
+        )
+      },
+      done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
+      err  = x => serr(x)
+    )
+
+    (step: StepT[X, E, F, A]) => cogroupI.apply(cstep(step)).map(endStep[X, E, E, F, A])
+  }
+  
+  def mergeDistinctI[X, E: Order, F[_]: Monad, A]: Enumeratee2T[X, E, E, F, A] = {
+    def cstep(step: StepT[X, E, F, A]): StepT[X, Either3[E, (E, E), E], F, A]  = step.fold(
+      cont = contf => scont { in: Input[Either3[E, (E, E), E]] =>
+        val nextInput = in.map(_.fold(identity[E], _._1, identity[E]))
+
+        contf(nextInput) >>== (s => cstep(s).pointI)
+      },
+      done = (a, r) => sdone(a, if (r.isEof) eofInput else emptyInput),
+      err  = x => serr(x)
+    )
+
+    (step: StepT[X, E, F, A]) => cogroupI.apply(cstep(step)).map(endStep[X, E, E, F, A])
+  }
+
+  private def endStep[X, E, EE, F[_], A](sa: StepT[X, Either3[E, (E, E), E], F, A]): StepT[X, EE, F, A] = {
+    sa.fold(
+      cont = sys.error("diverging iteratee"),
+      done = (a, r) => sdone[X, EE, F, A](a, if (r.isEof) eofInput[EE] else emptyInput[EE]),
+      err  = x      => serr[X, EE, F, A](x)
+    )
   }
 }
 
