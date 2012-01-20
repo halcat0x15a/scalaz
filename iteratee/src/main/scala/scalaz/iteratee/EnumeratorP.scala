@@ -7,18 +7,23 @@ import Enumeratee2T._
 import scalaz.syntax.Syntax.bind._
 import scalaz.syntax.Syntax.order._
 
-object EnumeratorP {
-  trait ForallM[P[_[_], _]] {
-    def apply[F[_]: Monad, A]: P[F, A]
-  }
-}
+abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
+  import EnumeratorP._
 
-abstract class EnumeratorP[X, E, G[_]: Monad] {
   def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ, A]
+
+  def mapE[I](enumerateeT: ForallM[({type λ[β[_], α] = EnumerateeT[X, E, I, β, α]})#λ]): EnumeratorP[X, I, G] = new EnumeratorP[X, I, G] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ, A] = {
+      type FG[α] = F[G, α]
+      implicit val FMonad = t[G]
+      (step: StepT[X, I, FG, A]) => iterateeT[X, I, FG, A]((enumerateeT[FG, A].apply(step) >>== self[F, StepT[X, I, FG, A]]).run(x => err[X, I, FG, A](x).value))
+    }
+  }
 }
 
 trait EnumeratorPFunctions {
   import EnumeratorP._
+
 
   implicit def enumPStream[X, E, G[_]: Monad](xs : Stream[E]) = new EnumeratorP[X, E, G] {
     def apply[F[_[_],_], A](implicit t: MonadTrans[F]) = {
@@ -62,7 +67,7 @@ trait EnumeratorPFunctions {
     }
   }
 
-  def liftE[X, O, I, G[_]: Monad](e2t: ForallM[({type λ[β[_], α] = Enumeratee2T[X, O, I, β, α]})#λ]): (EnumeratorP[X, O, G], EnumeratorP[X, O, G]) => EnumeratorP[X, I, G] = {
+  def liftE2[X, O, I, G[_]: Monad](e2t: ForallM[({type λ[β[_], α] = Enumeratee2T[X, O, I, β, α]})#λ]): (EnumeratorP[X, O, G], EnumeratorP[X, O, G]) => EnumeratorP[X, I, G] = {
     (e1: EnumeratorP[X, O, G], e2: EnumeratorP[X, O, G]) => new EnumeratorP[X, I, G] {
       def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ, A] = {
         import t.apply
@@ -77,30 +82,35 @@ trait EnumeratorPFunctions {
     }
   }
 
-  def cogroupE[X, E: Order, G[_]: Monad] = liftE[X, E, Either3[E, (E, E), E], G] {
+  def cogroupE[X, E: Order, G[_]: Monad] = liftE2[X, E, Either3[E, (E, E), E], G] {
     new ForallM[({type λ[β[_], α] = Enumeratee2T[X, E, Either3[E, (E, E), E], β, α]})#λ] {
       def apply[F[_]: Monad, A] = cogroupI[X, E, F, A]
     }
   }
 
-  def matchE[X, E: Order, G[_]: Monad] = liftE[X, E, (E, E), G] { 
+  def matchE[X, E: Order, G[_]: Monad] = liftE2[X, E, (E, E), G] { 
     new ForallM[({type λ[β[_], α] = Enumeratee2T[X, E, (E, E), β, α]})#λ] {
       def apply[F[_]: Monad, A] = matchI[X, E, F, A]
     }
   }
 
-  def mergeE[X, E: Order, G[_]: Monad] = liftE[X, E, E, G] { 
+  def mergeE[X, E: Order, G[_]: Monad] = liftE2[X, E, E, G] { 
     new ForallM[({type λ[β[_], α] = Enumeratee2T[X, E, E, β, α]})#λ] {
       def apply[F[_]: Monad, A] = mergeI[X, E, F, A]
     }
   }
 
-  def mergeDistinctE[X, E: Order, G[_]: Monad] = liftE[X, E, E, G] { 
+  def mergeDistinctE[X, E: Order, G[_]: Monad] = liftE2[X, E, E, G] { 
     new ForallM[({type λ[β[_], α] = Enumeratee2T[X, E, E, β, α]})#λ] {
       def apply[F[_]: Monad, A] = mergeDistinctI[X, E, F, A]
     }
   }
 }
 
+object EnumeratorP extends EnumeratorPFunctions {
+  trait ForallM[P[_[_], _]] {
+    def apply[F[_]: Monad, A]: P[F, A]
+  }
+}
 
 // vim: set ts=4 sw=4 et:
