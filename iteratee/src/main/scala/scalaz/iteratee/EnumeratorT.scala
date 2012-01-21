@@ -11,6 +11,9 @@ trait EnumeratorTInstances0 {
   implicit def enumeratorTPlus[X, E, F[_]](implicit F0: Bind[F]): Plus[({type λ[α]=EnumeratorT[X, E, F, α]})#λ] = new EnumeratorTPlus[X, E, F] {
     implicit def F = F0
   }
+  implicit def enumeratorTFunctor[X, F[_], A](implicit F0: Monad[F]): Functor[({ type λ[α] = EnumeratorT[X, α, F, A]})#λ] = new EnumeratorTFunctor[X, F, A] {
+    implicit def M = F0
+  }
 }
 
 trait EnumeratorTInstances extends EnumeratorTInstances0 {
@@ -23,6 +26,9 @@ trait EnumeratorTInstances extends EnumeratorTInstances0 {
   implicit def enumeratorMonoid[X, E, A]: Monoid[Enumerator[X, E, A]] = new Monoid[Enumerator[X, E, A]] {
     def append(f1: (Step[X, E, A]) => Step[X, E, A], f2: => (Step[X, E, A]) => Step[X, E, A]): Step[X, E, A] => Step[X, E, A] = f1 andThen f2
     def zero: (Step[X, E, A]) => Step[X, E, A] = x => x
+  }
+  implicit def enumeratorTPointed[X, F[_], A](implicit F0: Monad[F]): Pointed[({ type λ[α] = EnumeratorT[X, α, F, A]})#λ] = new EnumeratorTPointed[X, F, A] {
+    implicit def M = F0
   }
 }
 
@@ -179,7 +185,12 @@ private[scalaz] trait EnumeratorTPlusEmpty[X, E, F[_]] extends PlusEmpty[({type 
   def empty[A]: (StepT[X, E, F, A]) => IterateeT[X, E, F, A] = _.pointI
 }
 
-private[scalaz] trait EnumeratorTPointed[X, F[_], A] extends Pointed[({type λ[α]=EnumeratorT[X, α, F, A]})#λ] {
-  implicit def P: Pointed[F]
-  def point[E](e: E) = EnumeratorT.enumOne[X, E, F, A](e)
+private[scalaz] trait EnumeratorTFunctor[X, F[_], A] extends Functor[({type λ[α]=EnumeratorT[X, α, F, A]})#λ] {
+  implicit def M: Monad[F]
+  def map[E, B](fa: EnumeratorT[X, E, F, A])(f: E => B): EnumeratorT[X, B, F, A] = 
+    (step: StepT[X, B, F, A]) => iterateeT[X, B, F, A](EnumerateeT.map[X, E, B, F, A](f).apply(step).run(x => err[X, B, F, A](x).value))
+}
+
+private[scalaz] trait EnumeratorTPointed[X, F[_], A] extends Pointed[({type λ[α]=EnumeratorT[X, α, F, A]})#λ] with EnumeratorTFunctor[X, F, A] {
+  def point[E](e: => E) = EnumeratorT.enumOne[X, E, F, A](e)
 }
