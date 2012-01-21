@@ -7,9 +7,11 @@ import Enumeratee2T._
 import scalaz.syntax.Syntax.bind._
 import scalaz.syntax.Syntax.order._
 
-abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
-  import EnumeratorP._
+trait ForallM[P[_[_], _]] {
+  def apply[F[_]: Monad, A]: P[F, A]
+}
 
+abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
   def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ, A]
 
   def mapE[I](enumerateeT: ForallM[({type λ[β[_], α] = EnumerateeT[X, E, I, β, α]})#λ]): EnumeratorP[X, I, G] = new EnumeratorP[X, I, G] {
@@ -22,9 +24,6 @@ abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
 }
 
 trait EnumeratorPFunctions {
-  import EnumeratorP._
-
-
   implicit def enumPStream[X, E, G[_]: Monad](xs : Stream[E]) = new EnumeratorP[X, E, G] {
     def apply[F[_[_],_], A](implicit t: MonadTrans[F]) = {
       implicit val fmt = t.apply
@@ -107,10 +106,7 @@ trait EnumeratorPFunctions {
   }
 }
 
-object EnumeratorP extends EnumeratorPFunctions {
-  trait ForallM[P[_[_], _]] {
-    def apply[F[_]: Monad, A]: P[F, A]
-  }
-}
+object EnumeratorP extends EnumeratorPFunctions
+
 
 // vim: set ts=4 sw=4 et:
