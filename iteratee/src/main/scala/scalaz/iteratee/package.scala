@@ -20,8 +20,16 @@ package object iteratee {
     def apply[X, E, A](s: Step[X, E, A]): Iteratee[X, E, A] = iteratee(s)
   }
 
-  type IterateeNT[X, E, F[_], A] = 
-  IterateeT[X, E, ({type λ[α] = IterateeT[X, E, F, α]})#λ, A]
+  type Enumerator[X, E] =
+  EnumeratorT[X, E, Id]
+
+  type Enumeratee[X, O, I] = 
+  EnumerateeT[X, O, I, Id]
+
+  type Enumeratee2T[X, O, I, F[_], A] = 
+  StepT[X, I, F, A] => IterateeT[X, O, ({type λ[α] = IterateeT[X, O, F, α]})#λ, StepT[X, I, F, A]]
+
+  object Enumeratee2T extends Enumeratee2TFunctions
 
   type Iter[E, F[_], A] =
   IterateeT[Unit, E, F, A]
@@ -29,17 +37,6 @@ package object iteratee {
   type >@>[E, A] =
   Iteratee[Unit, E, A]
 
-  type Enumeratee2T[X, O, I, F[_], A] = 
-  StepT[X, I, F, A] => IterateeT[X, O, ({type λ[α] = IterateeT[X, O, F, α]})#λ, StepT[X, I, F, A]]
-
-  object Enumeratee2T extends Enumeratee2TFunctions
-
-  type Enumeratee[X, O, I, A] =
-  Step[X, I, A] => Iteratee[X, O, Step[X, I, A]]
-
-  type Enumerator[X, E, A] =
-  Step[X, E, A] => Step[X, E, A]
-
-  type >@@>[E, A] =
-  Enumerator[Unit, E, A]
+  type >@@>[E] =
+  Enumerator[Unit, E]
 }
