@@ -13,7 +13,6 @@ trait ForallM[P[_[_], _]] {
 
 abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
   def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ]
-  /*
 
   def mapE[I](enumerateeT: ForallM[({type λ[β[_], α] = EnumerateeT[X, E, I, β, α]})#λ]): EnumeratorP[X, I, G] = new EnumeratorP[X, I, G] {
     def apply[F[_[_], _]](implicit T: MonadTrans[F]): EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ] = {
@@ -24,11 +23,10 @@ abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
       }
     }
   }
-  */
 }
 
 trait EnumeratorPFunctions {
-  implicit def enumPStream[X, E, G[_]: Monad](xs : Stream[E]): EnumeratorP[X, E, G] = new EnumeratorP[X, E, G] {
+  def enumPStream[X, E, G[_]: Monad](xs : Stream[E]): EnumeratorP[X, E, G] = new EnumeratorP[X, E, G] {
     def apply[F[_[_],_]](implicit T: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ] = {
       type FG[α] = F[G, α]
       implicit val FGM = T[G]
