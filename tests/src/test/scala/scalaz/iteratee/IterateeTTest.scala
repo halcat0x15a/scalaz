@@ -22,11 +22,10 @@ class IterateeTTest extends Spec {
     val enum  = enumStream[Unit, Int, IterateeM](Stream(1, 3, 5, 7)) 
     val enum2 = enumStream[Unit, Int, Id](Stream(2, 3, 4, 5, 6)) 
 
-    val outer = (consume[Unit, (Int, Int), Id, List[(Int, Int)]] >>== matchI[Unit, Int, Id, List[(Int, Int)]]) &= enum
+    val outer = matchI[Unit, Int, Id, List[(Int, Int)]].apply(consume[Unit, (Int, Int), Id, List].value) &= enum
     val inner = outer.run(err _) &= enum2
 
-    //inner.run(_ => sys.error("...")) must_== List((3, 3), (5, 5))
-    true must_== false
+    iterateeT(inner.run(_ => sys.error("..."))).run(_ => sys.error("...")) must be_===(List((3, 3), (5, 5)))
   }
 /*
 
