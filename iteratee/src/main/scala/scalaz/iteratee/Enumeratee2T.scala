@@ -4,8 +4,6 @@ package iteratee
 import effect._
 import Iteratee._
 
-object Enumeratee2T extends Enumeratee2TFunctions
-
 trait Enumeratee2TFunctions {
   import scalaz.syntax.Syntax.bind._
   import scalaz.syntax.Syntax.order._

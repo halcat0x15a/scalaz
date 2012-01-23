@@ -12,15 +12,32 @@ trait EnumeratorTInstances0 {
   implicit def enumeratorTSemigroup[X, E, F[_]](implicit F0: Bind[F]): Semigroup[EnumeratorT[X, E, F]] = new EnumeratorTSemigroup[X, E, F] {
     implicit def F = F0
   }
+  /*
+  implicit def enumeratorTPlus[X, E, F[_]](implicit F0: Bind[F]): Plus[({type λ[α]=EnumeratorT[X, E, F, α]})#λ] = new EnumeratorTPlus[X, E, F] {
+    implicit def F = F0
+  }
   implicit def enumeratorTFunctor[X, F[_], A](implicit F0: Monad[F]): Functor[({ type λ[α] = EnumeratorT[X, α, F, A]})#λ] = new EnumeratorTFunctor[X, F, A] {
     implicit def M = F0
   }
+  */
 }
 
 trait EnumeratorTInstances extends EnumeratorTInstances0 {
   implicit def enumeratorTMonoid[X, E, F[_]](implicit F0: Monad[F]): Monoid[EnumeratorT[X, E, F]] = new EnumeratorTMonoid[X, E, F] {
     implicit def F = F0
   }
+  /*
+  implicit def enumeratorTPlusEmpty[X, E, F[_]](implicit F0: Monad[F]): PlusEmpty[({type λ[α]=EnumeratorT[X, E, F, α]})#λ] = new EnumeratorTPlusEmpty[X, E, F] {
+    implicit def F = F0
+  }
+  implicit def enumeratorMonoid[X, E, A]: Monoid[Enumerator[X, E, A]] = new Monoid[Enumerator[X, E, A]] {
+    def append(f1: (Step[X, E, A]) => Step[X, E, A], f2: => (Step[X, E, A]) => Step[X, E, A]): Step[X, E, A] => Step[X, E, A] = f1 andThen f2
+    def zero: (Step[X, E, A]) => Step[X, E, A] = x => x
+  }
+  implicit def enumeratorTPointed[X, F[_], A](implicit F0: Monad[F]): Pointed[({ type λ[α] = EnumeratorT[X, α, F]})#λ] = new EnumeratorTPointed[X, F] {
+    implicit def M = F0
+  }
+  */
 }
 
 trait EnumeratorTFunctions {

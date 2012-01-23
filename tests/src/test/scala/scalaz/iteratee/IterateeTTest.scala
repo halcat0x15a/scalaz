@@ -3,11 +3,10 @@ package iteratee
 
 import std.AllInstances._
 import Iteratee._
-import EnumeratorT._
+import Enumeratee2T._
 import effect._
 
 class IterateeTTest extends Spec {
-
   "head" in {
     (head[Unit, Int, Id] &= Stream(1, 2, 3)).runOrZero must be_===(Some(1))
   }
@@ -16,17 +15,20 @@ class IterateeTTest extends Spec {
     (consume[Unit, Int, Id, List] &= Stream(1, 2, 3)).runOrZero must be_===(List(1, 2, 3))
   }
 
-  "consume" in {
-    (consume[Unit, Int, Id, List] >>== Stream(1, 2, 3)).runOrZero must be_===(List(1, 2, 3))
-  }
-
   "match equal pairs" in {
     implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
-    val enum  = enumStream[Unit, Int, ({type L[A] = IterateeT[Unit, Int, Id, A]})#L, List[(Int, Int)]](Stream(1, 3, 5, 7)) 
-    val enum2 = enumStream[Unit, Int, Id, List[(Int, Int)]](Stream(2, 3, 4, 5, 6)) 
+    type IterateeM[A] = IterateeT[Unit, Int, Id, A]
 
-    ((matchI(consume[Unit, (Int, Int), Id, List].value) >>== enum).run(_ => done(Nil, eofInput)) >>== enum2).run(_ => Nil) must_== List((3, 3), (5, 5))
+    val enum  = enumStream[Unit, Int, IterateeM](Stream(1, 3, 5, 7)) 
+    val enum2 = enumStream[Unit, Int, Id](Stream(2, 3, 4, 5, 6)) 
+
+    val outer = (consume[Unit, (Int, Int), Id, List[(Int, Int)]] >>== matchI[Unit, Int, Id, List[(Int, Int)]]) &= enum
+    val inner = outer.run(err _) &= enum2
+
+    //inner.run(_ => sys.error("...")) must_== List((3, 3), (5, 5))
+    true must_== false
   }
+/*
 
   "cogroup" in {
     import Either3._
@@ -48,7 +50,6 @@ class IterateeTTest extends Spec {
     ))
   }
 
-/*
   "merge sorted iteratees" in {
     implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
     val enum  = enumStream[Unit, Int, ({type L[A] = IterateeT[Unit, Int, Id, A]})#L, List[Int]](Stream(1, 3, 5)) 
@@ -56,29 +57,29 @@ class IterateeTTest extends Spec {
 
     ((mergeI(consume[Unit, Int, Id, List].value) >>== enum).run(_ => done(Nil, eofInput)) >>== enum2).run(_ => Nil) must_== List(1, 2, 3, 3, 4, 5, 5, 6)
   }
-  */
+*/
 
   "cross the first element with all of the second iteratee's elements" in {
     import IdT._
     implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
     val enum1p = new EnumeratorP[Unit, Int, Id] {
-      def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A] = {
+      def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ] = {
         implicit val fmonad = t.apply[Id]
-        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A](Stream(1, 3, 5)) 
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ](Stream(1, 3, 5)) 
       }
     }
 
     val enum2p = new EnumeratorP[Unit, Int, Id] {
-      def apply[F[_[_], _], A](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A] = {
+      def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ] = {
         implicit val fmonad = t.apply[Id]
-        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ, A](Stream(2, 3, 4)) 
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ](Stream(2, 3, 4)) 
       }
     }
 
     implicit val idTm = idTMonad[Id]
     val consumer = consume[Unit, (Int, Int), ({type λ[α] = IdT[Id, α]})#λ, List]
-    val producer = cross[Unit, Int, Id](enum1p, enum2p).apply[IdT, List[(Int, Int)]]
-    (consumer >>== producer).run(x => sys.error("...")).value must be_===(List(
+    val producer = crossE[Unit, Int, Id](enum1p, enum2p).apply[IdT]
+    (consumer &= producer).run(_ => sys.error("...")).run must be_===(List(
       (1, 2), (1, 3), (1, 4), (3, 2), (3, 3), (3, 4), (5, 2), (5, 3), (5, 4)
     ))
   }
