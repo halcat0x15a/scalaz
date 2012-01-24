@@ -13,18 +13,6 @@ trait ForallM[P[_[_], _]] {
 
 abstract class EnumeratorP[X, E, G[_]: Monad] { self =>
   def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[G, α]})#λ]
-
-/*
-  def mapE[I](enumerateeT: ForallM[({type λ[β[_], α] = Enumeratee2T[X, E, I, β, α]})#λ]): EnumeratorP[X, I, G] = new EnumeratorP[X, I, G] {
-    def apply[F[_[_], _]](implicit T: MonadTrans[F]): EnumeratorT[X, I, ({type λ[α] = F[G, α]})#λ] = {
-      type FG[α] = F[G, α]
-      implicit val FGM = T[G]
-      new EnumeratorT[X, I, FG] {
-        def apply[A](step: StepT[X, I, FG, A]) = iterateeT((enumerateeT[FG, A].apply(step) &= self[F]).run(x => err[X, I, FG, A](x).value))
-      }
-    }
-  }
-  */
 }
 
 trait EnumeratorPFunctions {
