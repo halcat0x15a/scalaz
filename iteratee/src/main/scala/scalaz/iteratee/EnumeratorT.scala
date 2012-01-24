@@ -58,6 +58,23 @@ trait EnumeratorTInstances extends EnumeratorTInstances0 {
   implicit def enumeratorTMonad[X, F[_]](implicit M0: Monad[F]): Monad[({type λ[α]=EnumeratorT[X, α, F]})#λ] = new EnumeratorTMonad[X, F] {
     implicit def M = M0
   }
+
+  implicit def enumeratorTMonadTrans[X]: MonadTrans[({ type λ[β[_], α] = EnumeratorT[X, α, β] })#λ] = new MonadTrans[({ type λ[β[_], α] = EnumeratorT[X, α, β] })#λ] {
+    def hoist[F[_]: Monad, G[_]](f: F ~> G) = new (({type λ[α] = EnumeratorT[X, α, F]})#λ ~> ({type λ[α] = EnumeratorT[X, α, G]})#λ) {
+      def apply[E](fa: EnumeratorT[X, E, F]): EnumeratorT[X, E, G] = new EnumeratorT[X, E, G] {
+        def apply[A] = {
+          def feed: StepT[X, E, G, A] => IterateeT[X, E, F, StepT[X, E, G, A]] = sys.error("todo")
+          (s: StepT[X, E, G, A]) => iterateeT(f((feed(s) &= fa).run(x => sys.error("todo"))))
+        }
+      }
+    }
+
+    def liftM[G[_]: Monad, E](ga: G[E]): EnumeratorT[X, E, G] = new EnumeratorT[X, E, G] {
+      def apply[A] = (s: StepT[X, E, G, A]) => iterateeT(Monad[G].bind(ga) { e => s.mapCont(k => k(elInput(e))).value })
+    }
+
+    implicit def apply[G[_]: Monad]: Monad[({type λ[α] = EnumeratorT[X, α, G]})#λ] = enumeratorTMonad[X, G]
+  }
 }
 
 trait EnumeratorTFunctions {
