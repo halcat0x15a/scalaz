@@ -10,7 +10,7 @@ object MonadTrans {
   def apply[F[_[_], _]](implicit F: MonadTrans[F]): MonadTrans[F] = F
 }
 
-trait Hoist[F[_[_], _]] {
+trait Hoist[F[_[_], _]] extends MonadTrans[F] {
   def hoist[M[_]: Monad, N[_]](f: M ~> N): ({type f[x] = F[M, x]})#f ~> ({type f[x] = F[N, x]})#f
 }
 
