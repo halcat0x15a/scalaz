@@ -181,7 +181,8 @@ trait IterateeTInstances0 {
 }
 
 trait IterateeTInstances extends IterateeTInstances0 {
-  implicit def IterateeTMonadTrans[X, E]: MonadTrans[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] = new MonadTrans[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] {
+  implicit def IterateeTMonadTrans[X, E]: MonadTrans[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] with Hoist[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] = 
+  new MonadTrans[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] with Hoist[({type λ[α[_], β] = IterateeT[X, E, α, β]})#λ] {
     def hoist[F[_]: Monad, G[_]](f: F ~> G) = new (({type f[x] = IterateeT[X, E, F, x]})#f ~> ({type f[x] = IterateeT[X, E, G, x]})#f) {
       def apply[A](fa: IterateeT[X, E, F, A]): IterateeT[X, E, G, A] = fa mapI f
     }
