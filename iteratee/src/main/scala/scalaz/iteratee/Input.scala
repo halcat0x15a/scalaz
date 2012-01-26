@@ -42,6 +42,7 @@ sealed trait Input[E] {
   def exists(p: (=> E) => Boolean): Boolean =
     fold(false, p, false)
 
+  abstract override def toString = fold("Empty", el => el.toString, "EOF")
 }
 
 object Input extends InputFunctions with InputInstances {

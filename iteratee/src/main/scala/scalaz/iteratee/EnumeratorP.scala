@@ -104,7 +104,4 @@ trait EnumeratorPFunctions {
   }
 }
 
-object EnumeratorP extends EnumeratorPFunctions
-
-
 // vim: set ts=4 sw=4 et:

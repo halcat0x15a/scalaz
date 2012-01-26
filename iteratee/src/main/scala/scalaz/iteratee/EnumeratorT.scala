@@ -117,15 +117,18 @@ trait EnumeratorTFunctions {
         )
     }
 
+  /**
+   * An enumerator that yields the elements of the specified array from index min (inclusive) to max (exclusive)
+   */
   def enumArray[X, E, F[_]: Monad](a : Array[E], min: Int = 0, max: Option[Int] = None) : EnumeratorT[X, E, F] = 
     new EnumeratorT[X, E, F] {
-      private val limit = max.getOrElse(a.length)
+      private val limit = max.map(_ min (a.length)).getOrElse(a.length)
       def apply[A] = {
         def loop(pos : Int): StepT[X, E, F, A] => IterateeT[X, E, F, A] = {
           s => 
             s.mapCont(
-              k => if (pos == limit) s.pointI
-                   else              k(elInput(a(pos))) >>== loop(pos + 1)
+              k => if (limit > pos) k(elInput(a(pos))) >>== loop(pos + 1)
+                   else             s.pointI
             )   
         }
 
