@@ -42,9 +42,8 @@ trait Enumeratee2TFunctions {
             
                 case (Some(left), Some(right)) => 
                   for {
-                    left <- head[X, E, IterateeM]
                     right <- lift(head[X, E, F])
-                    a <- iterateeT[X, E, IterateeM, StepM[A]](contf(elInput(middle3((left.get, right.get)))) >>== (s => apply(s).value))
+                    a <- iterateeT[X, E, IterateeM, StepM[A]](contf(elInput(middle3((left, right.get)))) >>== (s => apply(s).value))
                   } yield a
 
                 case _ => done[X, E, IterateeM, StepM[A]](step, eofInput)
