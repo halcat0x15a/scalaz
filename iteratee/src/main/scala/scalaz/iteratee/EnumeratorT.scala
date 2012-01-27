@@ -160,6 +160,29 @@ trait EnumeratorTFunctions {
         checkCont1(contFactory => state => k => k(elInput(e)) >>== contFactory(f(state)), e)
       }
     }
+    
+  def cross[X, E, F[_]: Monad](e1: EnumeratorT[X, E, F], e2: EnumeratorT[X, E, F]): EnumeratorT[X, (E, E), F] =
+    new EnumeratorT[X, (E, E), F] {
+      def apply[A] = (step: StepT[X, (E, E), F, A]) => {
+        def outerLoop(step: StepT[X, (E, E), F, A]): IterateeT[X, E, F, StepT[X, (E, E), F, A]] =
+          for {
+            outerOpt   <- head[X, E, F]
+            sa         <- outerOpt match {
+                            case Some(e) => 
+                              val pairingIteratee = EnumerateeT.map[X, E, (E, E), F]((a: E) => (e, a)).apply(step)
+                              val nextStep = (pairingIteratee &= e2).run(x => err[X, (E, E), F, A](x).value)
+                              iterateeT[X, (E, E), F, A](nextStep) >>== outerLoop
+
+                            case None    => 
+                              done[X, E, F, StepT[X, (E, E), F, A]](step, eofInput) 
+                          }
+          } yield sa
+
+        iterateeT[X, (E, E), F, A] {
+          (outerLoop(step) &= e1).run(x => err[X, (E, E), F, A](x).value)
+        }
+      }
+    }
 }
 
 // Instances are mixed in with the IterateeT object

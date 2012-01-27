@@ -83,6 +83,31 @@ class IterateeTTest extends Spec {
     ))
   }
 
+  "match the first element with all of the second iteratee's elements, which compare equal" in {
+    import IdT._
+    implicit val v = IterateeT.IterateeTMonad[Unit, Int, Id]
+    val enum1p = new EnumeratorP[Unit, Int, Id] {
+      def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ] = {
+        implicit val fmonad = t.apply[Id]
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ](Stream(1)) 
+      }
+    }
+
+    val enum2p = new EnumeratorP[Unit, Int, Id] {
+      def apply[F[_[_], _]](implicit t: MonadTrans[F]): EnumeratorT[Unit, Int, ({type λ[α] = F[Id, α]})#λ] = {
+        implicit val fmonad = t.apply[Id]
+        enumStream[Unit, Int, ({type λ[α] = F[Id, α]})#λ](Stream(1, 1, 1)) 
+      }
+    }
+
+    implicit val idTm = idTMonad[Id]
+    val consumer = consume[Unit, (Int, Int), ({type λ[α] = IdT[Id, α]})#λ, List]
+    val producer = matchE[Unit, Int, Id].apply(enum1p, enum2p).apply[IdT]
+    (consumer &= producer).run(_ => sys.error("...")).run must be_===(List(
+      (1, 1), (1, 1), (1, 1)
+    ))
+  }
+
   object instances {
     object iterateet {
       def monad[F[_]: Monad, X, E] = Monad[({type λ[α] = IterateeT[X, E, F, α]})#λ]
@@ -92,17 +117,6 @@ class IterateeTTest extends Spec {
 
     object iteratee {
       def monad[X, E, F] = Monad[({type λ[α] = Iteratee[X, E, α]})#λ]
-    }
-
-    object enumeratorT {
-      def semigroup[X, E, F[_]: Bind] = Semigroup[EnumeratorT[X, E, F]]
-      def monoid[X, E, F[_]: Monad] = Monoid[EnumeratorT[X, E, F]]
-      //def plus[X, E, F[_]: Bind, A] = Plus[({type λ[α]=EnumeratorT[X, E, F, α]})#λ]
-      //def empty[X, E, F[_]: Monad, A] = PlusEmpty[({type λ[α]=EnumeratorT[X, E, F, α]})#λ]
-    }
-
-    object enumerator {
-      //def monoid[X, E, A] = Monoid[Enumerator[X, E, A]]
     }
   }
 }
