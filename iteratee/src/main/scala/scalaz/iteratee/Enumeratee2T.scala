@@ -81,13 +81,9 @@ trait Enumeratee2TFunctions {
             in.fold(
               el = _.fold(
                 left   = a => contf(elInput(a)) >>== (s => cstep(s).pointI),
-                middle = b => contf(elInput(b._1)) >>== { s =>
-                  s.fold(
-                    cont = contf  => contf(elInput(b._2)) >>== (s => cstep(s).pointI),
-                    done = (a, r) => done(sdone(a, if (r.isEof) eofInput else emptyInput), if (r.isEof) eofInput else emptyInput),
-                    err  = x      => err(x)
-                  )
-                },
+                // if the elements are equal, we simply take the right hand one since the left
+                // will be consumed when the right hand is no longer equal
+                middle = b => contf(elInput(b._2)) >>== (s => cstep(s).pointI),
                 right  = c => contf(elInput(c)) >>== (s => cstep(s).pointI)
               ),
               empty = contf(emptyInput[E]) >>== (s => cstep(s).pointI), 
