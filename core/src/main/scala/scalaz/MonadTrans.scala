@@ -20,24 +20,24 @@ trait Hoist[F[_[_], _]] extends MonadTrans[F] {
  * execution.
  */
 sealed trait MonadPartialOrder[G[_], F[_]] extends NaturalTransformation[F, G] { self =>
-  implicit def GM: Monad[G]
-  implicit def FM: Monad[F]
+  implicit val MG: Monad[G]
+  implicit val MF: Monad[F]
 
   def apply[A](m2: F[A]) = promote(m2)
   def promote[A](m2: F[A]): G[A]
 
   def compose[M[_]](mo: MonadPartialOrder[M, G]): MonadPartialOrder[M, F] = 
     new MonadPartialOrder[M, F] {
-      val GM = mo.GM
-      val FM = self.FM
+      val MG = mo.MG
+      val MF = self.MF
       def promote[A](m2: F[A]) = mo.promote(self.promote(m2))
     }
 
   def transform[T[_[_], _]: MonadTrans]: MonadPartialOrder[({ type λ[α] = T[G, α] })#λ, F] = 
     new MonadPartialOrder[({ type λ[α] = T[G, α] })#λ, F] {
-      val GM = MonadTrans[T].apply[G](self.GM)
-      val FM = self.FM
-      def promote[A](m2: F[A]) = MonadTrans[T].liftM(self.promote(m2))(self.GM)
+      val MG = MonadTrans[T].apply[G](self.MG)
+      val MF = self.MF
+      def promote[A](m2: F[A]) = MonadTrans[T].liftM(self.promote(m2))(self.MG)
     }
 }
 
@@ -50,8 +50,8 @@ trait MonadPartialOrderFunctions extends MonadPartialOrderFunctions1 {
   // the identity ordering
   implicit def identity[M[_]: Monad]: MonadPartialOrder[M, M] = 
     new MonadPartialOrder[M, M] {
-      val GM = Monad[M]
-      val FM = Monad[M]
+      val MG = Monad[M]
+      val MF = Monad[M]
       def promote[A](m: M[A]) = m
     }
 

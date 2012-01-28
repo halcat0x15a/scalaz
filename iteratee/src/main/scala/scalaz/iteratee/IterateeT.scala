@@ -235,6 +235,17 @@ trait IterateeTFunctions {
     cont(step)
   }
 
+  def collectT[X, E, F[_], A[_]](implicit M: Monad[F], mae: Monoid[A[E]], pointed: Pointed[A]): IterateeT[X, E, F, A[E]] = {
+    import scalaz.syntax.semigroup._
+    def step(e: Input[E]): IterateeT[X, E, F, A[E]] = 
+      e.fold(empty = cont(step)
+        , el = e => cont(step).map(a => Pointed[A].point(e) |+| a)
+        , eof = done(Monoid[A[E]].zero, eofInput[E])
+      )   
+
+    cont(step)
+  }
+
   /**An iteratee that consumes the head of the input **/
   def head[X, E, F[_] : Pointed]: IterateeT[X, E, F, Option[E]] = {
     def step(s: Input[E]): IterateeT[X, E, F, Option[E]] =
