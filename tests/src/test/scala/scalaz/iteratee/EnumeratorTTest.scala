@@ -41,9 +41,15 @@ class EnumeratorTTest extends Spec {
     (consume[Unit, Int, Id, List] &= enum.flatMap(i => enum.map(_ + i))).runOrZero must be_===(List(2, 3, 4, 3, 4, 5, 4, 5, 6))
   }
 
+  "uniq" in {
+    val enum = enumStream[Unit, Int, Id](Stream(1, 1, 2, 2, 2, 3, 3))
+    type EnumId[α] = EnumeratorT[Unit, α, Id]
+    (consume[Unit, Int, Id, List] &= enum.uniq).runOrZero must be_===(List(1, 2, 3))
+  }
+
   "lift" in {
     val enum = EnumeratorT.enumeratorTMonadTrans[Unit].liftM(List(1, 2, 3))
-    (consume[Unit, Int, List, List] &= enum.map(_ * 2)).runOrZero.flatten must be_===(List(2, 4, 6))
+    (collectT[Unit, Int, List, Id] &= enum.map(_ * 2)).runOrZero must be_===(List(2, 4, 6))
   }
 
   "enumerate an array" in {

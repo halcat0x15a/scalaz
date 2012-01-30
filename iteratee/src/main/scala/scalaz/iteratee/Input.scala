@@ -33,6 +33,9 @@ sealed trait Input[E] {
   def flatMap[X](f: (=> E) => Input[X]): Input[X] =
     fold(emptyInput, e => f(e), eofInput)
 
+  def filter(f: (=> E) => Boolean): Input[E] = 
+    fold(emptyInput, e => if (f(e)) this else emptyInput, eofInput)
+
   def foreach(f: (=> E) => Unit) =
     fold((), e => f(e), ())
 

@@ -3,6 +3,7 @@ package iteratee
 
 import effect._
 import Iteratee._
+import Ordering._
 
 trait EnumeratorT[X, E, F[_]] { self =>
   def apply[A]: StepT[X, E, F, A] => IterateeT[X, E, F, A]
@@ -40,6 +41,11 @@ trait EnumeratorT[X, E, F[_]] { self =>
       def apply[A] = { (step: StepT[X, B, F, A]) => 
         iterateeT((EnumerateeT.collect[X, E, B, F](pf).apply(step) &= self).run(x => err[X, B, F, A](x).value))
       }
+    }
+
+  def uniq(implicit ord: Order[E], M: Monad[F]): EnumeratorT[X, E, F] = 
+    new EnumeratorT[X, E, F] {
+      def apply[A] = s => EnumerateeT.uniq[X, E, F].apply(s).joinI[E, A] &= self
     }
 }
 
