@@ -47,6 +47,11 @@ trait EnumeratorT[X, E, F[_]] { self =>
     new EnumeratorT[X, E, F] {
       def apply[A] = s => EnumerateeT.uniq[X, E, F].apply(s).joinI[E, A] &= self
     }
+
+  def zipWithIndex(implicit M: Monad[F]): EnumeratorT[X, (E, Long), F] = 
+    new EnumeratorT[X, (E, Long), F] {
+      def apply[A] = s => iterateeT((EnumerateeT.zipWithIndex[X, E, F].apply(s) &= self).run(x => err[X, (E, Long), F, A](x).value))
+    }
 }
 
 trait EnumeratorTInstances0 {

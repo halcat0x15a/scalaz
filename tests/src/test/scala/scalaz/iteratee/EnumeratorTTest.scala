@@ -47,6 +47,12 @@ class EnumeratorTTest extends Spec {
     (consume[Unit, Int, Id, List] &= enum.uniq).runOrZero must be_===(List(1, 2, 3))
   }
 
+  "zipWithIndex" in {
+    val enum = enumStream[Unit, Int, Id](Stream(3, 4, 5))
+    type EnumId[α] = EnumeratorT[Unit, α, Id]
+    (consume[Unit, (Int, Long), Id, List] &= enum.zipWithIndex).runOrZero must be_===(List((3, 0L), (4, 1L), (5, 2L)))
+  }
+
   "lift" in {
     val enum = EnumeratorT.enumeratorTMonadTrans[Unit].liftM(List(1, 2, 3))
     (collectT[Unit, Int, List, Id] &= enum.map(_ * 2)).runOrZero must be_===(List(2, 4, 6))

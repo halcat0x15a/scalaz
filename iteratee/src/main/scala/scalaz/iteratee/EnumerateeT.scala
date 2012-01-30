@@ -93,6 +93,26 @@ trait EnumerateeTFunctions {
       }
     }
     
+  /**
+   * Zips with the count of elements that have been encountered.
+   */
+  def zipWithIndex[X, E, F[_]: Monad]: EnumerateeT[X, E, (E, Long), F] = 
+    new EnumerateeT[X, E, (E, Long), F] {
+      def apply[A] = {
+        type StepEl = Input[(E, Long)] => IterateeT[X, (E, Long), F, A] 
+        def loop(i: Long) = (step(_: StepEl, i)) andThen (cont[X, E, F, StepT[X, (E, Long), F, A]])
+        def step(k: StepEl, i: Long): (Input[E] => IterateeT[X, E, F, StepT[X, (E, Long), F, A]]) = {
+          (in: Input[E]) =>
+            in.map(e => (e, i)).fold(
+              el = e => k(elInput(e)) >>== doneOr(loop(i + 1))
+              , empty = cont(step(k, i))
+              , eof = done(scont(k), in)
+            )
+        }
+
+        doneOr(loop(0))
+      }
+    }
 
   def group[X, E, F[_], G[_]](n: Int)(implicit F: Pointed[F], FE: Monoid[F[E]], G: Monad[G], G1: CoPointed[G]): EnumerateeT[X, E, F[E], G] = 
     new EnumerateeT[X, E, F[E], G] {
